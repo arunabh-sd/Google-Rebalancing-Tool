@@ -627,49 +627,28 @@ async function run(){
   const ov=document.getElementById('loader');
   const sub=document.getElementById('ld-sub');
   ov.classList.add('on');
-  sub.textContent='Fetching campaign data…';
+  sub.textContent='Fetching campaign data from Google Ads…';
 
   const ids=[...sel];
-  await Promise.all(ids.map(async id=>{
-    const a=ACCTS.find(x=>x.id===id);
-    if(!a||!a.adId) return;
-    try{
-      sub.textContent=`Loading ${a.name}…`;
-      const r=await fetch(`/api/campaigns/${a.adId}`);
-      const camps=r.ok?await r.json():[];
-      if(camps.length) RECS[id]=buildRec(a,camps);
-    }catch(e){console.warn('Campaign fetch failed for',a.adId,e);}
-  }));
+  try{
+    const resp=await fetch('/api/rebalance',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ids})
+    });
+    if(!resp.ok){
+      const err=await resp.json().catch(()=>({detail:'Unknown error'}));
+      console.error('Rebalance error:',err.detail);
+    } else {
+      const recs=await resp.json();
+      Object.assign(RECS,recs);
+    }
+  }catch(e){
+    console.error('Rebalance fetch failed:',e);
+  }
 
   ov.classList.remove('on');
   showResults();
-}
-
-// ── BUILD REC (phase 2 — real data, basic bucketing, no budget shifts yet) ───
-function buildRec(a, camps){
-  const db5=a.db5, db0=a.db0;
-  const beRoas=db5?1/db5:null;
-  const floorRoas=db0?1/db0:null;
-
-  const campaigns=camps.map(c=>{
-    let bucket='leave';
-    if(beRoas&&c.roas>beRoas*1.05)       bucket='scale';
-    else if(floorRoas&&c.roas<floorRoas) bucket='cut';
-    else if(beRoas&&c.roas<beRoas)       bucket='watch';
-
-    const budgFmt='₹'+c.budget.toLocaleString('en-IN');
-    return{...c, budg:budgFmt, rec:budgFmt, dir:'f', delta:'₹0', sb:'—', bucket};
-  });
-
-  const signals=[];
-  const nScale=campaigns.filter(c=>c.bucket==='scale').length;
-  const nCut=campaigns.filter(c=>c.bucket==='cut').length;
-  const nWatch=campaigns.filter(c=>c.bucket==='watch').length;
-  if(nScale) signals.push({c:'green',t:`${nScale} campaign${nScale>1?'s':''} above 5% DB BE`});
-  if(nCut)   signals.push({c:'red',  t:`${nCut} campaign${nCut>1?'s':''} below 0% DB BE`});
-  if(nWatch) signals.push({c:'amber',t:`${nWatch} campaign${nWatch>1?'s':''} between 0–5% DB BE`});
-
-  return{campaigns, signals, projRoas:'—', flag:'', recentChanges:null};
 }
 
 // ── RESULTS ───────────────────────────────────────────────────────────────────
@@ -751,7 +730,7 @@ function buildCard(a, rec){
         </td>
         <td><span class="mono">${c.budg}</span><span style="color:var(--ink-3);font-size:10px;padding:0 4px">→</span><span class="mono">${c.rec}</span></td>
         <td><span class="${dCls}">${c.delta}</span></td>
-        <td><span class="mono" style="color:var(--ink-3)">${c.sb}%</span></td>
+        <td><span class="mono" style="color:var(--ink-3)">${c.sbPct||'—'}</span></td>
         <td><span class="bdg ${bCls}">${bLbl}</span></td>
       </tr>`;
     }).join('');
