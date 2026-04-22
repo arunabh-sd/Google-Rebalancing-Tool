@@ -233,8 +233,10 @@ select:focus{border-color:var(--blue)}
 
 .pnl-trend{display:flex;flex-direction:column;align-items:center;gap:3px}
 .pnl-l{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3)}
-.pnl-dots{display:flex;gap:2px;align-items:flex-end}
-.pd{width:8px;border-radius:1px;transition:height .2s}
+.pnl-dots{display:flex;gap:4px;align-items:flex-end}
+.pd{width:10px;border-radius:1px;transition:height .2s}
+.pnl-lbls{display:flex;gap:4px;margin-top:2px}
+.pnl-wk{width:10px;font-size:6px;color:var(--ink-4);font-family:var(--mono);text-align:center;text-transform:uppercase;letter-spacing:.2px;line-height:1}
 .pd-1{background:var(--green)}
 .pd-2{background:#86EFAC}
 .pd-3{background:var(--red)}
@@ -661,7 +663,8 @@ function pnlBar(arr){
     const cls=v===1?'pd-1':v===2?'pd-2':v===3?'pd-3':'pd-4';
     return `<div class="pd ${cls}" style="height:${hs[v]||5}px" title="${l}"></div>`;
   }).join('');
-  return `<div class="pnl-trend"><div class="pnl-l">PnL Trend</div><div class="pnl-dots">${bars}</div></div>`;
+  const lbls=vals.map(({l})=>`<div class="pnl-wk">${l}</div>`).join('');
+  return `<div class="pnl-trend"><div class="pnl-l">PnL Trend</div><div class="pnl-dots">${bars}</div><div class="pnl-lbls">${lbls}</div></div>`;
 }
 
 // ── BUILD CARD ────────────────────────────────────────────────────────────────
