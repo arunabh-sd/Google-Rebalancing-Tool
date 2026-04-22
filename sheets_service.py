@@ -115,14 +115,11 @@ def _get(row: list, col: dict, key: str, default: str = "") -> str:
         return default
 
 
-def _prof(wtd, db5, db0) -> str:
-    if wtd is None:
-        return "be"
-    if db5 and wtd <= db5:
-        return "profit"
-    if db0 and wtd <= db0:
-        return "be"
-    return "loss"
+def _prof(bucket: int) -> str:
+    """Derive profitability status from WTD PnL bucket (1=profit, 2=BE, 3=loss, 4=not running)."""
+    if bucket == 1: return "profit"
+    if bucket == 3: return "loss"
+    return "be"  # 2=BE, 4=not running → neutral
 
 
 def _spv(spend, target) -> str:
@@ -174,9 +171,9 @@ def get_accounts() -> list[dict]:
         if not ad_id:
             continue
 
+        wtd  = _pct(_get(row, col, "wtd_sgmv"))
         db5  = _pct(_get(row, col, "db5"))  or _pct(_get(row, col, "be5"))
         db0  = _pct(_get(row, col, "db0"))  or _pct(_get(row, col, "be0"))
-        wtd  = _pct(_get(row, col, "wtd_sgmv"))
         y_sp = _num(_get(row, col, "y_spend"))
         tgt  = _num(_get(row, col, "week_tgt"))
         mult = _pct(_get(row, col, "mult"))
@@ -210,7 +207,7 @@ def get_accounts() -> list[dict]:
             "predProfit": _pct(_get(row, col, "pred_profit")),
             "arrPct":     _pct(_get(row, col, "arr_pct")),
             "mult":       mult,
-            "prof":       _prof(wtd, db5, db0),
+            "prof":       _prof(_bkt(_get(row, col, "wtd_pnl"))),
             "spv":        _spv(y_sp, tgt),
         })
 
