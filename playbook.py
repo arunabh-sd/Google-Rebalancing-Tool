@@ -19,6 +19,15 @@ def _fmt(n: float) -> str:
     return "₹" + f"{int(round(n)):,}"
 
 
+def _exp_spend_delta_7d(budget: float, rec_budget: float, sb: float) -> float:
+    if rec_budget > budget:
+        return (rec_budget - budget) * sb * 0.88 * 7
+    elif rec_budget < budget:
+        daily = budget * min(sb, 1.0)
+        return (min(rec_budget, daily) - daily) * 7
+    return 0.0
+
+
 def _pct(f: float | None) -> str:
     if f is None:
         return "—"
@@ -192,22 +201,24 @@ def rebalance(account: dict, campaigns: list[dict]) -> dict | None:
 
         dir_    = "p" if delta > 0 else ("n" if delta < 0 else "f")
         delta_s = ("+" if delta > 0 else "") + _fmt(delta) if delta != 0 else "₹0"
+        spend_d = _exp_spend_delta_7d(budget, c["rec_budget"], c["sb"])
 
         result_campaigns.append({
-            "id":     c["id"],
-            "name":   c["name"],
-            "type":   c["type"],
-            "roas":   c["roas"],
-            "sgmv":   c["sgmv"],
-            "sb":     c["sb"],
-            "cost7d": c["cost7d"],
-            "budg":   _fmt(budget),
-            "rec":    _fmt(c["rec_budget"]),
-            "dir":    dir_,
-            "delta":  delta_s,
-            "sbPct":  _pct(c["sb"]),
-            "bucket": c["role"] if c["role"] in ("scale", "cut", "watch") else "leave",
-            "prof":   c["cls"],
+            "id":              c["id"],
+            "name":            c["name"],
+            "type":            c["type"],
+            "roas":            c["roas"],
+            "sgmv":            c["sgmv"],
+            "sb":              c["sb"],
+            "cost7d":          c["cost7d"],
+            "budg":            _fmt(budget),
+            "rec":             _fmt(c["rec_budget"]),
+            "dir":             dir_,
+            "delta":           delta_s,
+            "sbPct":           _pct(c["sb"]),
+            "bucket":          c["role"] if c["role"] in ("scale", "cut", "watch") else "leave",
+            "prof":            c["cls"],
+            "expSpendDelta7":  round(spend_d, 0),
         })
 
     # ── 6. signals ────────────────────────────────────────────────────────────

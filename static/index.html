@@ -719,15 +719,27 @@ function buildCard(a, rec){
       const sg=c.sgmv;
       const sgStr=sg!=null?(sg*100).toFixed(1)+'%':'—';
       const sgCls=sg==null?'df':a.db5&&sg<a.db5?'dp':a.db0&&sg<a.db0?'mono' +' '+'s-amber':'dn';
+      const sd=c.expSpendDelta7||0;
+      const sdStr=sd===0?'₹0':(sd>0?'+':'')+('₹'+Math.abs(Math.round(sd)).toLocaleString('en-IN'));
+      const sdCls=sd>0?'dp':sd<0?'dn':'df';
       return `<tr>
         <td><span class="ctype ${tc}">${c.type}</span><span class="cn">${c.name}</span></td>
         <td><span class="mono ${sgCls}">${sgStr}</span></td>
         <td><span class="mono">${c.budg}</span><span style="color:var(--ink-3);font-size:10px;padding:0 4px">→</span><span class="mono">${c.rec}</span></td>
         <td><span class="${dCls}">${c.delta}</span></td>
+        <td><span class="${sdCls}" style="font-family:var(--mono);font-size:11px;font-weight:600">${sdStr}</span></td>
         <td><span class="mono" style="color:var(--ink-3)">${c.sbPct||'—'}</span></td>
         <td><span class="bdg ${bCls}">${bLbl}</span></td>
       </tr>`;
     }).join('');
+    const totalDelta=rec.campaigns.reduce((s,c)=>s+(c.expSpendDelta7||0),0);
+    const tdStr=totalDelta===0?'₹0':(totalDelta>0?'+':'')+('₹'+Math.abs(Math.round(totalDelta)).toLocaleString('en-IN'));
+    const tdCls=Math.abs(totalDelta)<500?'dp':totalDelta>0?'a':'dn';
+    const footerRow=`<tr style="border-top:2px solid var(--line);background:var(--paper-2)">
+      <td colspan="4" style="font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px">Expected 7d spend change (guardrail check)</td>
+      <td><span class="mono ${tdCls}" style="font-weight:700">${tdStr}</span></td>
+      <td colspan="2"></td>
+    </tr>`;
   }
 
   const sigHtml=rec?rec.signals.map(s=>`<div class="sig sig-${s.c}">${s.t}</div>`).join(''):'';
@@ -747,8 +759,8 @@ function buildCard(a, rec){
         <span class="be-ref">5% DB BE: <b>${db5Pct}</b> &nbsp;·&nbsp; 0% DB BE: <b>${db0Pct}</b></span>
       </div>
       <table class="ct">
-        <thead><tr><th>Campaign</th><th>S/GMV 7d</th><th>Budget</th><th>Daily Δ</th><th>S/B</th><th></th></tr></thead>
-        <tbody>${rows}</tbody>
+        <thead><tr><th>Campaign</th><th>S/GMV 7d</th><th>Budget</th><th>Daily Δ</th><th>Exp Spend Δ 7d</th><th>S/B</th><th></th></tr></thead>
+        <tbody>${rows}${footerRow}</tbody>
       </table>
       <div class="card-foot">
         <div class="card-flag">${rec.flag?`<svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${rec.flag}`:''}</div>

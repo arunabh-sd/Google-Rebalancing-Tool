@@ -1,16 +1,19 @@
 import os
 import time
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sheets_service import get_accounts, get_raw
 from google_ads_service import get_campaigns
-from playbook import rebalance
+from playbook import rebalance as rule_rebalance
 
 app = FastAPI(title="ShopDeck Budget Rebalancer")
 
 _cache = {"data": None, "ts": 0}
-CACHE_TTL = 300  # 5 minutes
+CACHE_TTL  = 300
+_executor  = ThreadPoolExecutor(max_workers=20)
 
 
 def _get_accounts_cached(refresh: bool = False) -> list[dict]:
@@ -32,37 +35,68 @@ async def accounts(refresh: bool = False):
 
 
 class RebalanceRequest(BaseModel):
-    ids: list[str]   # seller IDs from the sheet
+    ids: list[str]
 
 
 @app.post("/api/rebalance")
 async def rebalance_accounts(req: RebalanceRequest):
+    loop = asyncio.get_event_loop()
+
     try:
         all_accounts = _get_accounts_cached()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sheet error: {e}")
 
     id_map = {a["id"]: a for a in all_accounts}
-    result = {}
 
-    for sid in req.ids:
+    # ── fetch campaigns for all selected accounts in parallel ─────────────────
+    async def fetch_one(sid: str):
         acct = id_map.get(sid)
         if not acct or not acct.get("adId"):
+            return sid, acct, []
+        try:
+            camps = await loop.run_in_executor(_executor, get_campaigns, acct["adId"])
+            return sid, acct, camps
+        except Exception as e:
+            print(f"Campaign fetch error [{sid}]: {e}")
+            return sid, acct, []
+
+    fetch_results = await asyncio.gather(*[fetch_one(sid) for sid in req.ids])
+
+    pairs = [(acct, camps) for _, acct, camps in fetch_results
+             if acct and camps]
+
+    # ── LLM rebalance (all accounts in one/few batched calls) ────────────────
+    result = {}
+    use_llm = os.environ.get("USE_LLM", "true").lower() == "true"
+
+    if use_llm and os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            from llm_playbook import rebalance_all
+            result = await loop.run_in_executor(_executor, rebalance_all, pairs)
+        except Exception as e:
+            print(f"LLM rebalance error: {e}")
+
+    # ── rule-based fallback for accounts LLM missed ───────────────────────────
+    processed = set(result.keys())
+    for sid, acct, camps in fetch_results:
+        if sid in processed or not acct or not camps:
             continue
         try:
-            camps = get_campaigns(acct["adId"])
-            rec   = rebalance(acct, camps)
+            rec = rule_rebalance(acct, camps)
             if rec:
                 result[sid] = rec
         except Exception as e:
-            result[sid] = {"error": str(e), "campaigns": [], "signals": [{"c": "red", "t": str(e)[:120]}]}
+            result[sid] = {
+                "campaigns": [], "signals": [{"c": "red", "t": str(e)[:120]}],
+                "projRoas": "—", "flag": "", "recentChanges": None,
+            }
 
     return result
 
 
 @app.get("/api/campaigns/{customer_id}")
 async def campaigns_debug(customer_id: str):
-    """Debug: raw campaign data for one account."""
     try:
         return get_campaigns(customer_id)
     except Exception as e:
