@@ -3,6 +3,7 @@ import time
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from sheets_service import get_accounts
+from google_ads_service import get_campaigns
 
 app = FastAPI(title="ShopDeck Budget Rebalancer")
 
@@ -25,6 +26,13 @@ async def accounts(refresh: bool = False):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+@app.get("/api/campaigns/{customer_id}")
+async def campaigns(customer_id: str):
+    try:
+        return get_campaigns(customer_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/debug")
 async def debug():

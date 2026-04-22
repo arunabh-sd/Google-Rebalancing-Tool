@@ -623,14 +623,53 @@ function updateCTA(){
 }
 
 // ── RUN ───────────────────────────────────────────────────────────────────────
-const MSGS=['Fetching 14-day campaign history…','Loading budget change log…','Computing S/B utilisation curves…','Calibrating with account multipliers…','Triaging campaigns into buckets…','Checking ROAS deterioration curves…','Composing reallocation…','Running spend guardrails…','Building recommendations…'];
-function run(){
+async function run(){
   const ov=document.getElementById('loader');
   const sub=document.getElementById('ld-sub');
   ov.classList.add('on');
-  let i=0;
-  const t=setInterval(()=>{if(i<MSGS.length)sub.textContent=MSGS[i++];},340);
-  setTimeout(()=>{clearInterval(t);ov.classList.remove('on');showResults();},3200);
+  sub.textContent='Fetching campaign data…';
+
+  const ids=[...sel];
+  await Promise.all(ids.map(async id=>{
+    const a=ACCTS.find(x=>x.id===id);
+    if(!a||!a.adId) return;
+    try{
+      sub.textContent=`Loading ${a.name}…`;
+      const r=await fetch(`/api/campaigns/${a.adId}`);
+      const camps=r.ok?await r.json():[];
+      if(camps.length) RECS[id]=buildRec(a,camps);
+    }catch(e){console.warn('Campaign fetch failed for',a.adId,e);}
+  }));
+
+  ov.classList.remove('on');
+  showResults();
+}
+
+// ── BUILD REC (phase 2 — real data, basic bucketing, no budget shifts yet) ───
+function buildRec(a, camps){
+  const db5=a.db5, db0=a.db0;
+  const beRoas=db5?1/db5:null;
+  const floorRoas=db0?1/db0:null;
+
+  const campaigns=camps.map(c=>{
+    let bucket='leave';
+    if(beRoas&&c.roas>beRoas*1.05)       bucket='scale';
+    else if(floorRoas&&c.roas<floorRoas) bucket='cut';
+    else if(beRoas&&c.roas<beRoas)       bucket='watch';
+
+    const budgFmt='₹'+c.budget.toLocaleString('en-IN');
+    return{...c, budg:budgFmt, rec:budgFmt, dir:'f', delta:'₹0', sb:'—', bucket};
+  });
+
+  const signals=[];
+  const nScale=campaigns.filter(c=>c.bucket==='scale').length;
+  const nCut=campaigns.filter(c=>c.bucket==='cut').length;
+  const nWatch=campaigns.filter(c=>c.bucket==='watch').length;
+  if(nScale) signals.push({c:'green',t:`${nScale} campaign${nScale>1?'s':''} above 5% DB BE`});
+  if(nCut)   signals.push({c:'red',  t:`${nCut} campaign${nCut>1?'s':''} below 0% DB BE`});
+  if(nWatch) signals.push({c:'amber',t:`${nWatch} campaign${nWatch>1?'s':''} between 0–5% DB BE`});
+
+  return{campaigns, signals, projRoas:'—', flag:'', recentChanges:null};
 }
 
 // ── RESULTS ───────────────────────────────────────────────────────────────────
