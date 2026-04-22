@@ -126,7 +126,7 @@ def _spv(spend, target) -> str:
     if not spend or not target:
         return "on"
     r = spend / target
-    if r < 0.90:
+    if r < 0.95:
         return "under"
     if r > 1.05:
         return "over"
