@@ -92,14 +92,14 @@ def rebalance(account: dict, campaigns: list[dict]) -> dict | None:
             # Relative reallocation: top 35% ROAS = scale candidates, bottom 35% = cut
             top_n    = max(1, round(n * 0.35))
             bottom_n = max(1, round(n * 0.35))
-            if i < top_n and sb > 0.65:          # only scaleable if budget-constrained
+            if i < top_n:
                 c["role"] = "scale"
             elif i >= n - bottom_n:
                 c["role"] = "cut"
             else:
                 c["role"] = "leave"
         else:
-            if cls == "profit" and (sb > 0.80 or is_b > 0.12):
+            if cls == "profit":
                 c["role"] = "scale"
             elif cls in ("loss", "no_conv"):
                 c["role"] = "cut"

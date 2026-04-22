@@ -338,11 +338,9 @@ table.ct tr:hover td{background:var(--paper-2)}
 .no-r{padding:24px 12px;text-align:center;font-size:12px;color:var(--ink-3)}
 .err-r{padding:24px 12px;text-align:center;font-size:12px;color:var(--red)}
 
-.roas-bar-wrap{display:inline-flex;align-items:center;gap:6px}
-.roas-bar{width:36px;height:4px;background:var(--paper-3);border-radius:2px;overflow:hidden;flex-shrink:0}
-.roas-fill{height:100%;border-radius:2px}
-.rf-above{background:var(--green)}
-.rf-below{background:var(--red)}
+.be-ref{font-size:10px;color:var(--ink-3);font-family:var(--mono)}
+.be-ref b{color:var(--ink-2);font-weight:600}
+.s-amber{color:var(--amber)}
 </style>
 </head>
 <body>
@@ -711,23 +709,20 @@ function buildCard(a, rec){
   // campaign rows (stage 2)
   let rows='';
   if(rec){
+    const db5Pct=a.db5!=null?(a.db5*100).toFixed(1)+'%':'—';
+    const db0Pct=a.db0!=null?(a.db0*100).toFixed(1)+'%':'—';
     rows=rec.campaigns.map(c=>{
       const tc={SEARCH:'ct-search',SHOPPING:'ct-shopping',PMAX:'ct-pmax',DSA:'ct-dsa'}[c.type]||'ct-search';
       const dCls=c.dir==='p'?'dp':c.dir==='n'?'dn':'df';
       const bCls={scale:'bdg-scale',cut:'bdg-cut',leave:'bdg-leave',watch:'bdg-watch'}[c.bucket];
       const bLbl={scale:'↑ Scale',cut:'↓ Cut',leave:'Leave',watch:'Watch'}[c.bucket];
-      const beRoas=a.db5?1/a.db5:null;
-      const fillPct=beRoas?Math.min(100,Math.round((c.roas/beRoas)*55)):50;
-      const fillCls=beRoas&&c.roas>=beRoas?'rf-above':'rf-below';
-      const rCls=beRoas&&c.roas>=beRoas?'g':'r';
+      // S/GMV colour: green < db5, amber db5–db0, red > db0, grey = no data
+      const sg=c.sgmv;
+      const sgStr=sg!=null?(sg*100).toFixed(1)+'%':'—';
+      const sgCls=sg==null?'df':a.db5&&sg<a.db5?'dp':a.db0&&sg<a.db0?'mono' +' '+'s-amber':'dn';
       return `<tr>
         <td><span class="ctype ${tc}">${c.type}</span><span class="cn">${c.name}</span></td>
-        <td>
-          <div class="roas-bar-wrap">
-            <span class="mono ${rCls}">${c.roas.toFixed(1)}x</span>
-            <div class="roas-bar"><div class="roas-fill ${fillCls}" style="width:${fillPct}%"></div></div>
-          </div>
-        </td>
+        <td><span class="mono ${sgCls}">${sgStr}</span></td>
         <td><span class="mono">${c.budg}</span><span style="color:var(--ink-3);font-size:10px;padding:0 4px">→</span><span class="mono">${c.rec}</span></td>
         <td><span class="${dCls}">${c.delta}</span></td>
         <td><span class="mono" style="color:var(--ink-3)">${c.sbPct||'—'}</span></td>
@@ -748,9 +743,12 @@ function buildCard(a, rec){
     ?`<div style="font-size:12px;color:var(--ink-2);padding:2px 0">Budget allocation is well-optimised. No changes recommended this cycle.</div>`
     :`${sigHtml?'<div class="signals">'+sigHtml+'</div>':''}
       ${changeLogHtml}
-      <div class="tbl-label">Campaign Budget Changes</div>
+      <div class="tbl-label" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Campaign Budget Changes</span>
+        <span class="be-ref">5% DB BE: <b>${db5Pct}</b> &nbsp;·&nbsp; 0% DB BE: <b>${db0Pct}</b></span>
+      </div>
       <table class="ct">
-        <thead><tr><th>Campaign</th><th>ROAS 7d</th><th>Budget</th><th>Daily Δ</th><th>S/B</th><th></th></tr></thead>
+        <thead><tr><th>Campaign</th><th>S/GMV 7d</th><th>Budget</th><th>Daily Δ</th><th>S/B</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="card-foot">
