@@ -1,0 +1,34 @@
+import os
+import time
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from sheets_service import get_accounts
+
+app = FastAPI(title="ShopDeck Budget Rebalancer")
+
+_cache = {"data": None, "ts": 0}
+CACHE_TTL = 300  # 5 minutes
+
+@app.get("/api/accounts")
+async def accounts(refresh: bool = False):
+    now = time.time()
+    if not refresh and _cache["data"] is not None and (now - _cache["ts"]) < CACHE_TTL:
+        return _cache["data"]
+    try:
+        data = get_accounts()
+        _cache["data"] = data
+        _cache["ts"] = now
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
