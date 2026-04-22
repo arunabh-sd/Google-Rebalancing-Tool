@@ -656,12 +656,11 @@ function showResults(){
   const ids=[...sel];
   const wr=ids.filter(id=>RECS[id]);
   const tsh=wr.reduce((s,id)=>s+RECS[id].campaigns.filter(c=>c.bucket!=='leave').length,0);
-  const ar=wr.length?Math.round(wr.reduce((s,id)=>s+parseFloat(RECS[id].projRoas),0)/wr.length):0;
   document.getElementById('res-sub').textContent=
     `${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})} · ${ids.length} accounts · spend guardrail active`;
   document.getElementById('s-a').textContent=ids.length;
   document.getElementById('s-sh').textContent=tsh||'—';
-  document.getElementById('s-r').textContent=wr.length?`+${ar}%`:'—';
+  document.getElementById('s-r').textContent='—';
   document.getElementById('s-ac').textContent='0';
   cSt={};
   const con=document.getElementById('cards');
@@ -707,10 +706,10 @@ function buildCard(a, rec){
     :`<span class="s-pill sp-pending" id="pill-${a.id}">Pending</span>`;
 
   // campaign rows (stage 2)
+  const db5Pct=a.db5!=null?(a.db5*100).toFixed(1)+'%':'—';
+  const db0Pct=a.db0!=null?(a.db0*100).toFixed(1)+'%':'—';
   let rows='';
   if(rec){
-    const db5Pct=a.db5!=null?(a.db5*100).toFixed(1)+'%':'—';
-    const db0Pct=a.db0!=null?(a.db0*100).toFixed(1)+'%':'—';
     rows=rec.campaigns.map(c=>{
       const tc={SEARCH:'ct-search',SHOPPING:'ct-shopping',PMAX:'ct-pmax',DSA:'ct-dsa'}[c.type]||'ct-search';
       const dCls=c.dir==='p'?'dp':c.dir==='n'?'dn':'df';
