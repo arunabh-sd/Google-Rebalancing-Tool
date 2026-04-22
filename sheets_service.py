@@ -4,7 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 SHEET_ID  = "1qNCgXO3xXfNMR11xEduNTZcydNg7klxgnDZkWUzfxag"
-SHEET_TAB = "performance tracker"
+SHEET_TAB = "Performance Tracker"
 SCOPES    = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 # 0-based column indices — map to "performance tracker" header row
