@@ -653,13 +653,13 @@ function showResults(){
 
 // ── PNL TREND BAR ─────────────────────────────────────────────────────────────
 function pnlBar(arr){
-  if(!arr||!arr.length) return '';
-  const labels=['LLW','LW','6d','3d','2d','Y','WTD'];
+  if(!arr||arr.length<7) return '';
   const hs={1:20,2:14,3:9,4:5};
-  const bars=arr.map((v,i)=>{
-    const h=hs[v]||5;
+  // LLW=arr[0], LW=arr[1], WTD=arr[6]
+  const vals=[{v:arr[0],l:'LLW'},{v:arr[1],l:'LW'},{v:arr[6],l:'WTD'}];
+  const bars=vals.map(({v,l})=>{
     const cls=v===1?'pd-1':v===2?'pd-2':v===3?'pd-3':'pd-4';
-    return `<div class="pd ${cls}" style="height:${h}px" title="${labels[i]}"></div>`;
+    return `<div class="pd ${cls}" style="height:${hs[v]||5}px" title="${l}"></div>`;
   }).join('');
   return `<div class="pnl-trend"><div class="pnl-l">PnL Trend</div><div class="pnl-dots">${bars}</div></div>`;
 }
