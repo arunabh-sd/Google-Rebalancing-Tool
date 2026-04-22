@@ -672,18 +672,16 @@ function buildCard(a, rec){
   const barCls={profit:'bar-profit',be:'bar-be',loss:'bar-loss'}[a.prof]||'bar-be';
   const noRec=!rec;
 
-  // KPI values — null-safe
+  // KPI values — null-safe; compare actual S/GMV vs actual BE (be5, not db5)
   const wtdPct = a.wtdSGmv != null ? (a.wtdSGmv*100).toFixed(1)+'%' : '—';
-  const bePct  = a.db5  != null ? (a.db5*100).toFixed(1)+'%'  : '—';
-  const hasGap = a.wtdSGmv != null && a.db5 != null && a.db5 > 0;
-  const gap    = hasGap ? ((a.wtdSGmv/a.db5-1)*100).toFixed(0) : null;
-  const gapCls = !hasGap ? '' : (a.wtdSGmv <= a.db5 ? 'g' : 'r');
+  const bePct  = a.be5 != null ? (a.be5*100).toFixed(1)+'%' : '—';
+  const hasGap = a.wtdSGmv != null && a.be5 != null && a.be5 > 0;
+  const gap    = hasGap ? ((a.wtdSGmv/a.be5-1)*100).toFixed(0) : null;
+  const gapCls = !hasGap ? '' : (a.wtdSGmv <= a.be5 ? 'g' : 'r');
   const gapStr = gap != null ? (gap>0?'+':'')+gap+'%' : '—';
   const hasSp  = a.ySpend != null && a.target != null && a.target > 0;
   const spendPct = hasSp ? Math.round((a.ySpend/a.target)*100)+'%' : '—';
   const spvCls = !hasSp ? '' : ({on:'b',under:'a',over:'r'}[a.spv]||'');
-  const predStr= a.predProfit!=null?(a.predProfit>=0?'+':'')+(a.predProfit*100).toFixed(1)+'%':'—';
-  const predCls= a.predProfit==null?'':(a.predProfit>=0.05?'g':a.predProfit>=0?'a':'r');
 
   const pillHtml=noRec
     ?`<span class="s-pill sp-nochange">No Change</span>`
@@ -753,10 +751,10 @@ function buildCard(a, rec){
         <div class="card-kpis">
           <div class="kpi">
             <div class="kpi-l">WTD S/GMV</div>
-            <div class="kpi-v ${a.wtdSGmv!=null&&a.db5!=null?(a.wtdSGmv<=a.db5?'g':'r'):''}">${wtdPct}</div>
+            <div class="kpi-v ${a.wtdSGmv!=null&&a.be5!=null?(a.wtdSGmv<=a.be5?'g':'r'):''}">${wtdPct}</div>
           </div>
           <div class="kpi">
-            <div class="kpi-l">5% DB BE</div>
+            <div class="kpi-l">5% BE</div>
             <div class="kpi-v">${bePct}</div>
           </div>
           <div class="kpi">
@@ -766,10 +764,6 @@ function buildCard(a, rec){
           <div class="kpi">
             <div class="kpi-l">Yest/Target</div>
             <div class="kpi-v ${spvCls}">${spendPct}</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-l">Pred Profit</div>
-            <div class="kpi-v ${predCls}">${predStr}</div>
           </div>
           ${pnlBar(a.pnl)}
           ${rec?`<div class="kpi"><div class="kpi-l">Proj Lift</div><div class="kpi-v g">${rec.projRoas}</div></div>`:''}
