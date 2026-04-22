@@ -709,18 +709,18 @@ function buildCard(a, rec){
   const db5Pct=a.db5!=null?(a.db5*100).toFixed(1)+'%':'—';
   const db0Pct=a.db0!=null?(a.db0*100).toFixed(1)+'%':'—';
   let rows='';
+  let footerRow='';
   if(rec){
     rows=rec.campaigns.map(c=>{
       const tc={SEARCH:'ct-search',SHOPPING:'ct-shopping',PMAX:'ct-pmax',DSA:'ct-dsa'}[c.type]||'ct-search';
       const dCls=c.dir==='p'?'dp':c.dir==='n'?'dn':'df';
       const bCls={scale:'bdg-scale',cut:'bdg-cut',leave:'bdg-leave',watch:'bdg-watch'}[c.bucket];
       const bLbl={scale:'↑ Scale',cut:'↓ Cut',leave:'Leave',watch:'Watch'}[c.bucket];
-      // S/GMV colour: green < db5, amber db5–db0, red > db0, grey = no data
       const sg=c.sgmv;
       const sgStr=sg!=null?(sg*100).toFixed(1)+'%':'—';
-      const sgCls=sg==null?'df':a.db5&&sg<a.db5?'dp':a.db0&&sg<a.db0?'mono' +' '+'s-amber':'dn';
+      const sgCls=sg==null?'df':a.db5&&sg<a.db5?'dp':a.db0&&sg<a.db0?'s-amber':'dn';
       const sd=c.expSpendDelta7||0;
-      const sdStr=sd===0?'₹0':(sd>0?'+':'')+('₹'+Math.abs(Math.round(sd)).toLocaleString('en-IN'));
+      const sdStr=sd===0?'₹0':(sd>0?'+':'')+'₹'+Math.abs(Math.round(sd)).toLocaleString('en-IN');
       const sdCls=sd>0?'dp':sd<0?'dn':'df';
       return `<tr>
         <td><span class="ctype ${tc}">${c.type}</span><span class="cn">${c.name}</span></td>
@@ -733,9 +733,10 @@ function buildCard(a, rec){
       </tr>`;
     }).join('');
     const totalDelta=rec.campaigns.reduce((s,c)=>s+(c.expSpendDelta7||0),0);
-    const tdStr=totalDelta===0?'₹0':(totalDelta>0?'+':'')+('₹'+Math.abs(Math.round(totalDelta)).toLocaleString('en-IN'));
-    const tdCls=Math.abs(totalDelta)<500?'dp':totalDelta>0?'a':'dn';
-    const footerRow=`<tr style="border-top:2px solid var(--line);background:var(--paper-2)">
+    const tdAbs=Math.abs(Math.round(totalDelta));
+    const tdStr=tdAbs<50?'~₹0':(totalDelta>0?'+':'')+'₹'+tdAbs.toLocaleString('en-IN');
+    const tdCls=tdAbs<500?'dp':totalDelta>0?'s-amber':'dn';
+    footerRow=`<tr style="border-top:2px solid var(--line);background:var(--paper-2)">
       <td colspan="4" style="font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px">Expected 7d spend change (guardrail check)</td>
       <td><span class="mono ${tdCls}" style="font-weight:700">${tdStr}</span></td>
       <td colspan="2"></td>
