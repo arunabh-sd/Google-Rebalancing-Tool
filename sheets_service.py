@@ -7,64 +7,66 @@ SHEET_ID  = "1qNCgXO3xXfNMR11xEduNTZcydNg7klxgnDZkWUzfxag"
 SHEET_TAB = "Performance Tracker"
 SCOPES    = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
-# 0-based column indices — map to "performance tracker" header row
-C = {
-    "sid":        0,   # Seller Id
-    "name":       1,   # Seller Name
-    "ad_id":      2,   # Ad Account ID
-    # 3: Temp POC (ignored)
-    "ggl":        4,   # POC Assigned = Google GL
-    "gl":         5,   # GL
-    "gm":         6,   # GM
-    "tag":        7,   # >5000 / <5000
-    "y_sgmv":     8,   # Yesterday S/GMV
-    # 9: Day before yest (unused in UI for now)
-    # 10: Delta (ignore)
-    "l2d_sgmv":   11,
-    "l3d_sgmv":   12,
-    "l6d_sgmv":   13,
-    "wtd_sgmv":   14,  # WTD S/GMV ← primary profitability signal
-    "lw_sgmv":    15,  # Last week S/GMV
-    "lw_db_sgmv": 16,  # Last week DB S/GMV (dashboard-reported)
-    "be5":        17,  # 5% BE (unadjusted — fallback only)
-    "be0":        18,  # 0% BE (unadjusted — fallback only)
-    "mult":       19,  # Multiplier = LW DB S/GMV ÷ LW Actual S/GMV
-    "db10":       20,  # 10% DB
-    "db5":        21,  # 5% DB (dashboard-adjusted) ← primary breakeven
-    "db0":        22,  # 0% DB ← hard floor
-    "lw_profit":  23,  # Last week Profit % of NMV
-    "pred_profit":24,  # This week Predicted Profit
-    "arr_pct":    25,  # ARR % contribution
-    "lw_arr_bh":  26,  # LW ARR BH%
-    "w2_profit":  27,  # Week -2 Profit
-    "y_pl_db":    28,  # Y PLDb (dashboard PnL bucket)
-    "y_pnl":      29,  # Y pnL  (1=profit>5%, 2=0-5%, 3=loss, 4=not running)
-    "l2d_pnl":    30,
-    "l3d_pnl":    31,
-    "l6d_pnl":    32,
-    "wtd_pnl":    33,
-    "lw_pnl":     34,
-    "llw_pnl":    35,
-    # 36-40: ignored (reason codes, comments)
-    "week_tgt":   41,  # Week Target (₹ daily spend target)
-    "y_spend":    42,  # Yesterday Spend (₹)
-    # 43: Day Before Yesterday spend
-    # 44: Delta
-    "tgt_delta":  45,  # Week Target Delta
-    "l3d_sp":     46,  # Last 3d Spends (daily avg)
-    "wtd_sp":     47,  # WTD Spends (daily avg)
-    "lw_sp":      48,  # Last week Spends (daily avg)
-    "llw_sp":     49,  # Last to Last week Spend (daily avg)
-    "sat_spend":  50,  # Last Saturday Spend
-    # 51-62: ignored
-    "y_gmv":      63,  # Yesterday GMV
-}
-
 MISSING = {"NA", "#VALUE!", "#N/A", "#REF!", "#DIV/0!", "NANA", "-", ""}
+
+# Canonical header name → key used in code
+# Each entry is (key, [list of possible header names to match])
+HEADER_MAP = [
+    ("sid",         ["Seller Id"]),
+    ("name",        ["Seller Name"]),
+    ("ad_id",       ["Ad Account ID"]),
+    ("ggl",         ["POC Assigned"]),
+    ("gl",          ["GL"]),
+    ("gm",          ["GM"]),
+    ("tag",         ["Tag"]),
+    ("wtd_sgmv",    ["WTD S/Gmv", "WTD S/GMV"]),
+    ("lw_sgmv",     ["Last weeK S/GMV", "Last week S/GMV"]),
+    ("lw_db_sgmv",  ["Last week DB S/gmv", "Last week DB S/GMV"]),
+    ("be5",         ["5% BE"]),
+    ("be0",         ["0% BE"]),
+    ("mult",        ["Multiplier"]),
+    ("db5",         ["5% DB"]),
+    ("db0",         ["0% DB"]),
+    ("pred_profit", ["This week Predicted Profit"]),
+    ("arr_pct",     ["ARR % (as per Yest Gmv)", "ARR %"]),
+    ("y_pl_db",     ["Y PLDb"]),
+    ("y_pnl",       ["Y pnL"]),
+    ("l2d_pnl",     ["L2d PL"]),
+    ("l3d_pnl",     ["L3d PL"]),
+    ("l6d_pnl",     ["L6d PnL", "6d PnL"]),
+    ("wtd_pnl",     ["WTD PnL"]),
+    ("lw_pnl",      ["LW PnL"]),
+    ("llw_pnl",     ["LLW PnL"]),
+    ("week_tgt",    ["Week Target"]),
+    ("y_spend",     ["Yesterday Spend"]),
+]
+
+
+def _build_col_map(headers: list[str]) -> dict[str, int]:
+    """Build key → column index from the actual header row."""
+    # Normalize headers once
+    norm = [h.strip() for h in headers]
+
+    col = {}
+    for key, candidates in HEADER_MAP:
+        found = None
+        for c in candidates:
+            c_lower = c.lower()
+            for i, h in enumerate(norm):
+                if h.lower() == c_lower:
+                    found = i
+                    break
+            if found is not None:
+                break
+        if found is not None:
+            col[key] = found
+        # If not found, key will be absent — callers get "" via _get fallback
+
+    return col
 
 
 def _pct(v) -> float | None:
-    """Parse '16.88%' → 0.1688. Returns None for missing/error values."""
+    """'16.88%' → 0.1688 | '0.2149' → 0.2149 | blank/error → None"""
     if v is None:
         return None
     s = str(v).strip()
@@ -82,7 +84,7 @@ def _pct(v) -> float | None:
 
 
 def _num(v) -> float | None:
-    """Parse '12,223' → 12223.0. Returns None for missing/error values."""
+    """'12,223' → 12223.0 | blank/error → None"""
     if v is None:
         return None
     s = str(v).strip().replace(",", "").replace("₹", "").replace(" ", "")
@@ -95,7 +97,7 @@ def _num(v) -> float | None:
 
 
 def _bkt(v, default: int = 4) -> int:
-    """Parse PnL bucket (1/2/3/4). Returns default for missing data."""
+    """PnL bucket string → int (1/2/3/4)"""
     try:
         n = int(float(str(v).strip()))
         return n if 1 <= n <= 4 else default
@@ -103,7 +105,10 @@ def _bkt(v, default: int = 4) -> int:
         return default
 
 
-def _get(row: list, idx: int, default: str = "") -> str:
+def _get(row: list, col: dict, key: str, default: str = "") -> str:
+    idx = col.get(key)
+    if idx is None:
+        return default
     try:
         return row[idx] if idx < len(row) else default
     except IndexError:
@@ -111,7 +116,6 @@ def _get(row: list, idx: int, default: str = "") -> str:
 
 
 def _prof(wtd, db5, db0) -> str:
-    """Derive profitability status from S/GMV vs breakeven thresholds."""
     if wtd is None:
         return "be"
     if db5 and wtd <= db5:
@@ -122,8 +126,7 @@ def _prof(wtd, db5, db0) -> str:
 
 
 def _spv(spend, target) -> str:
-    """Derive spend-vs-target status."""
-    if not spend or not target:
+    if spend is None or target is None or target == 0:
         return "on"
     r = spend / target
     if r < 0.95:
@@ -136,10 +139,23 @@ def _spv(spend, target) -> str:
 def _client():
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if not raw:
-        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON environment variable is not set")
-    info = json.loads(raw)
-    creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON env var not set")
+    creds = Credentials.from_service_account_info(json.loads(raw), scopes=SCOPES)
     return gspread.authorize(creds)
+
+
+def get_raw() -> dict:
+    """Debug: return headers with indices and first data row."""
+    gc = _client()
+    ws = gc.open_by_key(SHEET_ID).worksheet(SHEET_TAB)
+    rows = ws.get_all_values()
+    headers = rows[0] if rows else []
+    col = _build_col_map(headers)
+    return {
+        "col_map": col,
+        "headers": {str(i): h for i, h in enumerate(headers)},
+        "sample":  rows[1] if len(rows) > 1 else [],
+    }
 
 
 def get_accounts() -> list[dict]:
@@ -150,53 +166,52 @@ def get_accounts() -> list[dict]:
     if not rows:
         return []
 
+    col = _build_col_map(rows[0])
+
     out = []
-    for row in rows[1:]:  # skip header row
-        ad_id = _get(row, C["ad_id"]).strip()
+    for row in rows[1:]:
+        ad_id = _get(row, col, "ad_id").strip()
         if not ad_id:
-            continue  # skip blank rows
+            continue
 
-        # Breakeven: prefer dashboard-adjusted (DB) columns, fall back to BE
-        db5 = _pct(_get(row, C["db5"])) or _pct(_get(row, C["be5"]))
-        db0 = _pct(_get(row, C["db0"])) or _pct(_get(row, C["be0"]))
+        db5  = _pct(_get(row, col, "db5"))  or _pct(_get(row, col, "be5"))
+        db0  = _pct(_get(row, col, "db0"))  or _pct(_get(row, col, "be0"))
+        wtd  = _pct(_get(row, col, "wtd_sgmv"))
+        y_sp = _num(_get(row, col, "y_spend"))
+        tgt  = _num(_get(row, col, "week_tgt"))
+        mult = _pct(_get(row, col, "mult"))
 
-        wtd    = _pct(_get(row, C["wtd_sgmv"]))
-        y_sp   = _num(_get(row, C["y_spend"]))
-        tgt    = _num(_get(row, C["week_tgt"]))
-        mult   = _pct(_get(row, C["mult"]))   # stored as % e.g. '96.39%' → 0.9639
-
-        # PnL trend array: [LLW, LW, 6d, 3d, 2d, Y, WTD]
         pnl = [
-            _bkt(_get(row, C["llw_pnl"])),
-            _bkt(_get(row, C["lw_pnl"])),
-            _bkt(_get(row, C["l6d_pnl"])),
-            _bkt(_get(row, C["l3d_pnl"])),
-            _bkt(_get(row, C["l2d_pnl"])),
-            _bkt(_get(row, C["y_pnl"])),
-            _bkt(_get(row, C["wtd_pnl"])),
+            _bkt(_get(row, col, "llw_pnl")),
+            _bkt(_get(row, col, "lw_pnl")),
+            _bkt(_get(row, col, "l6d_pnl")),
+            _bkt(_get(row, col, "l3d_pnl")),
+            _bkt(_get(row, col, "l2d_pnl")),
+            _bkt(_get(row, col, "y_pnl")),
+            _bkt(_get(row, col, "wtd_pnl")),
         ]
 
         out.append({
-            "id":          _get(row, C["sid"]).strip(),
-            "name":        _get(row, C["name"]).strip(),
-            "adId":        ad_id,
-            "ggl":         _get(row, C["ggl"]).strip(),
-            "gl":          _get(row, C["gl"]).strip(),
-            "gm":          _get(row, C["gm"]).strip(),
-            "tag":         _get(row, C["tag"]).strip(),
-            "wtdSGmv":     wtd,
-            "db5":         db5,
-            "db0":         db0,
-            "be5":         _pct(_get(row, C["be5"])),
-            "lw":          _pct(_get(row, C["lw_sgmv"])),
-            "ySpend":      y_sp,
-            "target":      tgt,
-            "pnl":         pnl,
-            "predProfit":  _pct(_get(row, C["pred_profit"])),
-            "arrPct":      _pct(_get(row, C["arr_pct"])),
-            "mult":        mult,
-            "prof":        _prof(wtd, db5, db0),
-            "spv":         _spv(y_sp, tgt),
+            "id":         _get(row, col, "sid").strip(),
+            "name":       _get(row, col, "name").strip(),
+            "adId":       ad_id,
+            "ggl":        _get(row, col, "ggl").strip(),
+            "gl":         _get(row, col, "gl").strip(),
+            "gm":         _get(row, col, "gm").strip(),
+            "tag":        _get(row, col, "tag").strip(),
+            "wtdSGmv":    wtd,
+            "db5":        db5,
+            "db0":        db0,
+            "be5":        _pct(_get(row, col, "be5")),
+            "lw":         _pct(_get(row, col, "lw_sgmv")),
+            "ySpend":     y_sp,
+            "target":     tgt,
+            "pnl":        pnl,
+            "predProfit": _pct(_get(row, col, "pred_profit")),
+            "arrPct":     _pct(_get(row, col, "arr_pct")),
+            "mult":       mult,
+            "prof":       _prof(wtd, db5, db0),
+            "spv":        _spv(y_sp, tgt),
         })
 
     return out

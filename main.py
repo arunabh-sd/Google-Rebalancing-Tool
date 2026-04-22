@@ -26,6 +26,15 @@ async def accounts(refresh: bool = False):
 async def health():
     return {"status": "ok"}
 
+@app.get("/api/debug")
+async def debug():
+    """Returns header → column index map and one sample row. Remove before production."""
+    from sheets_service import get_raw
+    try:
+        return get_raw()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 if __name__ == "__main__":
