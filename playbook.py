@@ -52,10 +52,12 @@ def _absorbed_spend(budget: float, rec_budget: float, sb: float) -> float:
     return (rec_budget - budget) * sb * 0.88 * 7
 
 
-def rebalance(account: dict, campaigns: list[dict]) -> dict | None:
+def rebalance(account: dict, campaigns: list[dict], mode: str = "neutral") -> dict | None:
     db5 = account.get("db5")   # S/GMV threshold — below = profitable
     db0 = account.get("db0")   # S/GMV threshold — above = loss
     spv = account.get("spv", "on")
+    revops_under = (mode == "revops" and spv == "under")
+    revops_over  = (mode == "revops" and spv == "over")
 
     if not campaigns:
         return None
@@ -163,10 +165,10 @@ def rebalance(account: dict, campaigns: list[dict]) -> dict | None:
     absorbed = sum(_absorbed_spend(c["budget"], c["rec_budget"], c["sb"])
                    for c in ranked if c["role"] == "scale")
 
-    if all_loss or (not has_profit):
+    # RevOps/underspend: skip spend-neutral constraint — goal is to increase spend
+    if not revops_under and (all_loss or (not has_profit)):
         # Scale campaigns should only absorb what cut campaigns release (spend-neutral)
         if absorbed > 0 and released < absorbed:
-            # Scales are too ambitious for what cuts can fund — pull back proportionally
             adj = released / absorbed if absorbed > 0 else 0
             for c in ranked:
                 if c["role"] == "scale":
@@ -174,17 +176,23 @@ def rebalance(account: dict, campaigns: list[dict]) -> dict | None:
                     c["rec_budget"] = round(c["budget"] + excess * adj, 0)
                     c["rec_budget"] = max(c["rec_budget"], 100.0)
 
-    # Guardrail 1: for under/on-target, total spend must not drop
+    # Guardrail 1: for under/on-target in neutral mode, total spend must not drop
     proj_spend = total_spend_7d - released + absorbed
-    if spv in ("under", "on") and proj_spend < total_spend_7d * 0.92:
-        # Soften cuts until spend is maintained
+    if not revops_under and spv in ("under", "on") and proj_spend < total_spend_7d * 0.92:
         shortfall = total_spend_7d * 0.92 - proj_spend
         for c in ranked:
             if c["role"] == "cut" and shortfall > 0:
-                # Restore budget partially
                 restore  = min(shortfall / 7 / max(c["sb"], 0.1), c["budget"] - c["rec_budget"])
                 c["rec_budget"] = round(c["rec_budget"] + restore, 0)
                 shortfall -= restore * c["sb"] * 7
+
+    # RevOps/overspend: soften all cuts to reduce spend aggressively
+    if revops_over and spv == "over":
+        for c in ranked:
+            if c["role"] in ("watch", "leave") and c["cls"] not in ("profit",):
+                c["role"]       = "cut"
+                c["rec_budget"] = round(c["budget"] * 0.80, 0)
+                c["rec_budget"] = max(c["rec_budget"], 100.0)
 
     # ── 5. filter trivial changes and format output ───────────────────────────
     result_campaigns = []
@@ -204,21 +212,21 @@ def rebalance(account: dict, campaigns: list[dict]) -> dict | None:
         spend_d = _exp_spend_delta_7d(budget, c["rec_budget"], c["sb"])
 
         result_campaigns.append({
-            "id":              c["id"],
-            "name":            c["name"],
-            "type":            c["type"],
-            "roas":            c["roas"],
-            "sgmv":            c["sgmv"],
-            "sb":              c["sb"],
-            "cost7d":          c["cost7d"],
-            "budg":            _fmt(budget),
-            "rec":             _fmt(c["rec_budget"]),
-            "dir":             dir_,
-            "delta":           delta_s,
-            "sbPct":           _pct(c["sb"]),
-            "bucket":          c["role"] if c["role"] in ("scale", "cut", "watch") else "leave",
-            "prof":            c["cls"],
-            "expSpendDelta7":  round(spend_d, 0),
+            "id":                c["id"],
+            "name":              c["name"],
+            "type":              c["type"],
+            "roas":              c["roas"],
+            "sgmv":              c["sgmv"],
+            "sb":                c["sb"],
+            "cost7d":            c["cost7d"],
+            "budg":              _fmt(budget),
+            "rec":               _fmt(c["rec_budget"]),
+            "dir":               dir_,
+            "delta":             delta_s,
+            "sbPct":             _pct(c["sb"]),
+            "bucket":            c["role"] if c["role"] in ("scale", "cut", "watch") else "leave",
+            "prof":              c["cls"],
+            "expSpendDeltaDay":  round(spend_d / 7, 0),
         })
 
     # ── 6. signals ────────────────────────────────────────────────────────────

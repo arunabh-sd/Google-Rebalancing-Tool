@@ -36,6 +36,7 @@ async def accounts(refresh: bool = False):
 
 class RebalanceRequest(BaseModel):
     ids: list[str]
+    mode: str = "neutral"
 
 
 @app.post("/api/rebalance")
@@ -73,7 +74,7 @@ async def rebalance_accounts(req: RebalanceRequest):
     if use_llm and os.environ.get("ANTHROPIC_API_KEY"):
         try:
             from llm_playbook import rebalance_all
-            result = await loop.run_in_executor(_executor, rebalance_all, pairs)
+            result = await loop.run_in_executor(_executor, rebalance_all, pairs, req.mode)
         except Exception as e:
             print(f"LLM rebalance error: {e}")
 
@@ -83,7 +84,7 @@ async def rebalance_accounts(req: RebalanceRequest):
         if sid in processed or not acct or not camps:
             continue
         try:
-            rec = rule_rebalance(acct, camps)
+            rec = rule_rebalance(acct, camps, req.mode)
             if rec:
                 result[sid] = rec
         except Exception as e:

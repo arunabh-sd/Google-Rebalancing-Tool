@@ -341,6 +341,37 @@ table.ct tr:hover td{background:var(--paper-2)}
 .be-ref{font-size:10px;color:var(--ink-3);font-family:var(--mono)}
 .be-ref b{color:var(--ink-2);font-weight:600}
 .s-amber{color:var(--amber)}
+
+/* ── MODE TOGGLE ────────────────────────────── */
+.mode-toggle{display:flex;background:var(--paper-2);border:1px solid var(--line);border-radius:var(--r);padding:3px;margin-bottom:10px;gap:2px}
+.mode-btn{flex:1;padding:5px 6px;border:none;background:none;border-radius:4px;font-family:var(--sans);font-size:11px;font-weight:500;color:var(--ink-3);cursor:pointer;transition:all .15s;white-space:nowrap;text-align:center}
+.mode-btn.active{background:var(--paper);color:var(--ink);box-shadow:var(--shadow);font-weight:600}
+.mode-btn.active.revops-mode{background:var(--blue);color:#fff}
+
+/* ── SUMMARY TABLE ──────────────────────────── */
+.summary-wrap{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);overflow:hidden;margin-bottom:18px;box-shadow:var(--shadow)}
+.summary-hd{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.summary-hd-title{font-size:11px;font-weight:600;color:var(--ink);text-transform:uppercase;letter-spacing:.5px}
+.summary-body{overflow-x:auto}
+table.st{width:100%;border-collapse:collapse;font-size:11px;min-width:760px}
+table.st th{text-align:right;padding:6px 10px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3);border-bottom:1px solid var(--line);white-space:nowrap;background:var(--paper-2)}
+table.st th:first-child{text-align:left}
+table.st td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
+table.st td:first-child{text-align:left;font-weight:500;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.st tfoot td{font-weight:700;background:var(--paper-2);border-top:2px solid var(--line);border-bottom:none}
+table.st tr:hover td{background:#FAFBFD}
+
+/* ── REVOPS BREAKDOWN ───────────────────────── */
+.revops-box{background:var(--blue-2);border:1px solid var(--blue-3);border-radius:var(--r);padding:10px 14px;margin-bottom:12px}
+.revops-box-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--blue);margin-bottom:8px}
+.revops-kpis{display:flex;gap:16px;flex-wrap:wrap}
+.revops-kpi{display:flex;flex-direction:column;gap:2px}
+.revops-kpi-l{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-3)}
+.revops-kpi-v{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--ink)}
+.revops-kpi-v.g{color:var(--green)} .revops-kpi-v.r{color:var(--red)} .revops-kpi-v.a{color:var(--amber)}
+.new-camp-note{margin-top:8px;padding:6px 10px;background:var(--amber-2);border:1px solid var(--amber-3);border-radius:var(--r);font-size:11px;color:var(--amber);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.btn-new-csv{padding:3px 10px;background:var(--amber);color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-new-csv:hover{background:var(--ink)}
 </style>
 </head>
 <body>
@@ -437,13 +468,17 @@ table.ct tr:hover td{background:var(--paper-2)}
     </div>
 
     <div class="sb-cta">
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="mode-neutral" onclick="setMode('neutral')">Rebalance</button>
+        <button class="mode-btn" id="mode-revops" onclick="setMode('revops')">RevOps Execution</button>
+      </div>
       <div class="cta-meta">
         <span class="cta-txt" id="cta-txt">No accounts selected</span>
         <span class="cta-n" id="cta-n">0</span>
       </div>
       <button class="btn-rb" id="rb-btn" disabled onclick="run()">
         <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        Rebalance Selected
+        <span id="rb-btn-lbl">Rebalance Selected</span>
       </button>
     </div>
   </div>
@@ -483,6 +518,32 @@ table.ct tr:hover td{background:var(--paper-2)}
           <div class="sbox"><div class="sl">Accepted</div><div class="sv g" id="s-ac">0</div></div>
         </div>
 
+        <div id="summary-wrap" class="summary-wrap" style="display:none">
+          <div class="summary-hd">
+            <div class="summary-hd-title">Summary</div>
+            <span class="be-ref" id="summary-mode-label"></span>
+          </div>
+          <div class="summary-body">
+            <table class="st">
+              <thead>
+                <tr>
+                  <th style="text-align:left">Account</th>
+                  <th>Y Spend</th>
+                  <th>Wk Target</th>
+                  <th>Status</th>
+                  <th>Prof WTD</th>
+                  <th>Rebln Budget</th>
+                  <th>ROAS Lift</th>
+                  <th>Exp Δ/day</th>
+                  <th>Δ vs Daily Tgt</th>
+                </tr>
+              </thead>
+              <tbody id="summary-body"></tbody>
+              <tfoot id="summary-foot"></tfoot>
+            </table>
+          </div>
+        </div>
+
         <div id="cards"></div>
       </div>
     </div>
@@ -506,6 +567,18 @@ let sel = new Set();
 let vis = [];
 let filt = {prof:new Set(),spv:new Set(),tag:new Set()};
 let cSt = {};
+let mode = 'neutral';
+
+// ── MODE ──────────────────────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  const btnN = document.getElementById('mode-neutral');
+  const btnR = document.getElementById('mode-revops');
+  const rbLbl = document.getElementById('rb-btn-lbl');
+  btnN.className = 'mode-btn' + (m==='neutral'?' active':'');
+  btnR.className = 'mode-btn' + (m==='revops'?' active revops-mode':'');
+  rbLbl.textContent = m==='revops' ? 'Execute RevOps' : 'Rebalance Selected';
+}
 
 // ── INIT — fetch real data ────────────────────────────────────────────────────
 async function init() {
@@ -632,7 +705,7 @@ async function run(){
     const resp=await fetch('/api/rebalance',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ids})
+      body:JSON.stringify({ids, mode})
     });
     if(!resp.ok){
       const err=await resp.json().catch(()=>({detail:'Unknown error'}));
@@ -656,16 +729,116 @@ function showResults(){
   const ids=[...sel];
   const wr=ids.filter(id=>RECS[id]);
   const tsh=wr.reduce((s,id)=>s+RECS[id].campaigns.filter(c=>c.bucket!=='leave').length,0);
+
+  // Net spend delta (daily)
+  const netSpendDay = wr.reduce((s,id)=>
+    s + RECS[id].campaigns.reduce((cs,c)=>cs+(c.expSpendDeltaDay||0),0), 0);
+  const netAbs = Math.abs(Math.round(netSpendDay));
+  const netStr = netAbs < 10 ? '~₹0' : (netSpendDay>0?'+':'')+'₹'+netAbs.toLocaleString('en-IN');
+
+  const modeLabel = mode==='revops' ? 'RevOps Execution' : 'Rebalance · spend-neutral';
   document.getElementById('res-sub').textContent=
-    `${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})} · ${ids.length} accounts · spend guardrail active`;
+    `${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})} · ${ids.length} accounts · ${modeLabel}`;
   document.getElementById('s-a').textContent=ids.length;
   document.getElementById('s-sh').textContent=tsh||'—';
   document.getElementById('s-r').textContent='—';
+  document.getElementById('s-sp').textContent=netStr;
   document.getElementById('s-ac').textContent='0';
   cSt={};
+
+  buildSummaryTable(ids);
+
   const con=document.getElementById('cards');
   con.innerHTML='';
   ids.forEach(id=>{const a=ACCTS.find(x=>x.id===id);if(a){cSt[id]='pending';con.appendChild(buildCard(a,RECS[id]));}});
+}
+
+// ── SUMMARY TABLE ─────────────────────────────────────────────────────────────
+function buildSummaryTable(ids) {
+  const wrap = document.getElementById('summary-wrap');
+  const tbody = document.getElementById('summary-body');
+  const tfoot = document.getElementById('summary-foot');
+  const modeLabel = document.getElementById('summary-mode-label');
+
+  modeLabel.textContent = mode==='revops' ? 'Mode: RevOps Execution' : 'Mode: Rebalance (spend-neutral)';
+
+  const fmtR = n => n != null && n > 0 ? '₹'+Math.round(n).toLocaleString('en-IN') : '—';
+  const fmtD = n => n === null ? '—' : (n>=0?'+':'')+'₹'+Math.abs(Math.round(n)).toLocaleString('en-IN');
+
+  let totYSpend=0, totTarget=0, totExpDelta=0, totReblnBudget=0, totCount=0;
+
+  const rowsHtml = ids.map(id=>{
+    const a = ACCTS.find(x=>x.id===id);
+    const rec = RECS[id];
+    if(!a) return '';
+    totCount++;
+
+    const ySpend = a.ySpend || 0;
+    const wkTarget = a.target || 0;
+    const dailyTarget = wkTarget / 7;
+
+    let totalExpDeltaDay = 0;
+    let totalReblnBudget = 0;
+    if(rec) {
+      totalExpDeltaDay = rec.campaigns.reduce((s,c)=>s+(c.expSpendDeltaDay||0),0);
+      totalReblnBudget = rec.campaigns.reduce((s,c)=>{
+        const n = parseInt((c.rec||'₹0').replace(/[₹,]/g,'')) || 0;
+        return s + n;
+      }, 0);
+    }
+
+    const expDailySpend = ySpend + totalExpDeltaDay;
+    const deltaVsTgt = dailyTarget > 0 ? expDailySpend - dailyTarget : null;
+
+    totYSpend += ySpend; totTarget += wkTarget;
+    totExpDelta += totalExpDeltaDay; totReblnBudget += totalReblnBudget;
+
+    const spvBadge = {
+      under:`<span class="tag t-under">Under</span>`,
+      on:`<span class="tag t-on">On</span>`,
+      over:`<span class="tag t-over">Over</span>`
+    }[a.spv]||'';
+    const profBadge = {
+      profit:`<span class="tag t-profit">Profit</span>`,
+      be:`<span class="tag t-be">B/E</span>`,
+      loss:`<span class="tag t-loss">Loss</span>`
+    }[a.prof]||'';
+    const dCls = deltaVsTgt===null?'':deltaVsTgt>=0?'dp':'dn';
+    const eDCls = totalExpDeltaDay>=0?'dp':'dn';
+
+    return `<tr>
+      <td title="${a.name}">${a.name}</td>
+      <td class="mono">${fmtR(ySpend)}</td>
+      <td class="mono">${fmtR(wkTarget)}</td>
+      <td>${spvBadge}</td>
+      <td>${profBadge}</td>
+      <td class="mono">${totalReblnBudget?fmtR(totalReblnBudget):'—'}</td>
+      <td class="mono" style="color:var(--ink-3)">—</td>
+      <td class="mono ${eDCls}">${fmtD(totalExpDeltaDay)}</td>
+      <td class="mono ${dCls}">${fmtD(deltaVsTgt)}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.innerHTML = rowsHtml;
+
+  const totDailyTarget = totTarget / 7;
+  const totExpSpend = totYSpend + totExpDelta;
+  const totDeltaTgt = totDailyTarget > 0 ? totExpSpend - totDailyTarget : null;
+  const totEDCls = totExpDelta>=0?'dp':'dn';
+  const totDCls = (totDeltaTgt||0)>=0?'dp':'dn';
+
+  tfoot.innerHTML = `<tr>
+    <td>Total (${totCount})</td>
+    <td class="mono">${fmtR(totYSpend)}</td>
+    <td class="mono">${fmtR(totTarget)}</td>
+    <td></td><td></td>
+    <td class="mono">${totReblnBudget?fmtR(totReblnBudget):'—'}</td>
+    <td class="mono" style="color:var(--ink-3)">—</td>
+    <td class="mono ${totEDCls}">${fmtD(totExpDelta)}</td>
+    <td class="mono ${totDCls}">${fmtD(totDeltaTgt)}</td>
+  </tr>`;
+
+  wrap.style.display = ids.length ? '' : 'none';
 }
 
 // ── PNL TREND BAR ─────────────────────────────────────────────────────────────
@@ -719,7 +892,7 @@ function buildCard(a, rec){
       const sg=c.sgmv;
       const sgStr=sg!=null?(sg*100).toFixed(1)+'%':'—';
       const sgCls=sg==null?'df':a.db5&&sg<a.db5?'dp':a.db0&&sg<a.db0?'s-amber':'dn';
-      const sd=c.expSpendDelta7||0;
+      const sd=c.expSpendDeltaDay||0;
       const sdStr=sd===0?'₹0':(sd>0?'+':'')+'₹'+Math.abs(Math.round(sd)).toLocaleString('en-IN');
       const sdCls=sd>0?'dp':sd<0?'dn':'df';
       return `<tr>
@@ -732,12 +905,12 @@ function buildCard(a, rec){
         <td><span class="bdg ${bCls}">${bLbl}</span></td>
       </tr>`;
     }).join('');
-    const totalDelta=rec.campaigns.reduce((s,c)=>s+(c.expSpendDelta7||0),0);
+    const totalDelta=rec.campaigns.reduce((s,c)=>s+(c.expSpendDeltaDay||0),0);
     const tdAbs=Math.abs(Math.round(totalDelta));
-    const tdStr=tdAbs<50?'~₹0':(totalDelta>0?'+':'')+'₹'+tdAbs.toLocaleString('en-IN');
-    const tdCls=tdAbs<500?'dp':totalDelta>0?'s-amber':'dn';
+    const tdStr=tdAbs<10?'~₹0':(totalDelta>0?'+':'')+'₹'+tdAbs.toLocaleString('en-IN');
+    const tdCls=tdAbs<100?'dp':totalDelta>0?'s-amber':'dn';
     footerRow=`<tr style="border-top:2px solid var(--line);background:var(--paper-2)">
-      <td colspan="4" style="font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px">Expected 7d spend change (guardrail check)</td>
+      <td colspan="4" style="font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px">Net daily spend Δ (guardrail ≈ ₹0)</td>
       <td><span class="mono ${tdCls}" style="font-weight:700">${tdStr}</span></td>
       <td colspan="2"></td>
     </tr>`;
@@ -747,20 +920,50 @@ function buildCard(a, rec){
   const changeLogHtml=rec?.recentChanges
     ?`<div class="change-log">
         <svg class="cl-icon" width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <div class="cl-text"><strong>Recent change:</strong> ${rec.recentChanges}</div>
+        <div class="cl-text"><strong>Strategy:</strong> ${rec.recentChanges}</div>
       </div>`
     :'';
 
+  // RevOps breakdown for underspend/overspend accounts
+  let revopsBoxHtml = '';
+  if(mode === 'revops' && rec && a.spv !== 'on') {
+    const yS = a.ySpend || 0;
+    const wkTgt = a.target || 0;
+    const dailyTgt = wkTgt / 7;
+    const totalExpDay = rec.campaigns.reduce((s,c)=>s+(c.expSpendDeltaDay||0),0);
+    const expSpend = yS + totalExpDay;
+    const delta = dailyTgt > 0 ? expSpend - dailyTgt : null;
+    const fmt = n => n ? '₹'+Math.round(n).toLocaleString('en-IN') : '—';
+    const fmtD = n => n===null?'—':(n>=0?'+':'')+'₹'+Math.abs(Math.round(n)).toLocaleString('en-IN');
+    const dCls = delta===null?'':delta>=0?'g':'r';
+    const remainingGap = delta !== null && delta < 0 ? Math.abs(delta) : 0;
+    const newCampNote = remainingGap > 200
+      ? `<div class="new-camp-note">
+          ₹${Math.round(remainingGap).toLocaleString('en-IN')}/day still to cover — consider new campaigns
+          <button class="btn-new-csv" onclick="exportNewCampCSV('${a.id}',${Math.round(remainingGap)})">Download brief</button>
+        </div>` : '';
+    revopsBoxHtml = `<div class="revops-box">
+      <div class="revops-box-title">RevOps · ${a.spv==='under'?'Underspend':'Overspend'} Account</div>
+      <div class="revops-kpis">
+        <div class="revops-kpi"><div class="revops-kpi-l">Daily Target</div><div class="revops-kpi-v">${fmt(dailyTgt)}</div></div>
+        <div class="revops-kpi"><div class="revops-kpi-l">Yest Spend</div><div class="revops-kpi-v">${fmt(yS)}</div></div>
+        <div class="revops-kpi"><div class="revops-kpi-l">Exp Post-Rebalance</div><div class="revops-kpi-v">${fmt(expSpend)}</div></div>
+        <div class="revops-kpi"><div class="revops-kpi-l">Δ vs Target</div><div class="revops-kpi-v ${dCls}">${fmtD(delta)}</div></div>
+      </div>
+      ${newCampNote}
+    </div>`;
+  }
+
   const bodyHtml=noRec
     ?`<div style="font-size:12px;color:var(--ink-2);padding:2px 0">Budget allocation is well-optimised. No changes recommended this cycle.</div>`
-    :`${sigHtml?'<div class="signals">'+sigHtml+'</div>':''}
+    :`${revopsBoxHtml}${sigHtml?'<div class="signals">'+sigHtml+'</div>':''}
       ${changeLogHtml}
       <div class="tbl-label" style="display:flex;align-items:center;justify-content:space-between">
         <span>Campaign Budget Changes</span>
         <span class="be-ref">5% DB BE: <b>${db5Pct}</b> &nbsp;·&nbsp; 0% DB BE: <b>${db0Pct}</b></span>
       </div>
       <table class="ct">
-        <thead><tr><th>Campaign</th><th>S/GMV 7d</th><th>Budget</th><th>Daily Δ</th><th>Exp Spend Δ 7d</th><th>S/B</th><th></th></tr></thead>
+        <thead><tr><th>Campaign</th><th>S/GMV 7d</th><th>Budget</th><th>Daily Δ</th><th>Exp Spend Δ/day</th><th>S/B 3d</th><th></th></tr></thead>
         <tbody>${rows}${footerRow}</tbody>
       </table>
       <div class="card-foot">
@@ -858,6 +1061,20 @@ function exportCSV(){
   const url=URL.createObjectURL(blob);
   const el=document.createElement('a');
   el.href=url;el.download=`shopdeck_rebalance_${new Date().toISOString().slice(0,10)}.csv`;el.click();
+}
+
+function exportNewCampCSV(sid, gapPerDay) {
+  const a = ACCTS.find(x=>x.id===sid);
+  if(!a) return;
+  const rows = [
+    ['Account ID','Account Name','Gap per Day (₹)','Weekly Gap (₹)','Notes'],
+    [a.adId, a.name, gapPerDay, Math.round(gapPerDay*7), 'Budget gap not coverable by existing campaigns — new campaigns needed']
+  ];
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const el = document.createElement('a');
+  el.href=url; el.download=`revops_new_camp_${a.id}_${new Date().toISOString().slice(0,10)}.csv`; el.click();
 }
 
 init();

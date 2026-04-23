@@ -50,18 +50,32 @@ SYSTEM = """\
 You are a Google Ads budget optimization expert for ShopDeck (Indian e-commerce).
 
 GOAL: Maximize total profitable spend across campaigns for each account.
-METRIC: S/GMV = Cost ÷ Conversion Value. Lower = better (more profitable).
-  • db5 = S/GMV threshold for 5% profit margin. Campaign profitable if S/GMV < db5.
-  • db0 = S/GMV threshold for breakeven. Campaign in loss if S/GMV > db0.
-  • S/B = Spend÷Budget ratio. High S/B → budget is the constraint, scaling will increase spend.
-  • isb = IS lost to budget (direct scaling opportunity). isr = IS lost to rank (bid/quality issue — budget alone won't help).
 
-KEY INSIGHT: Even if ALL campaigns are in loss, moving spend from high-loss campaigns to low-loss campaigns improves overall ROAS and PnL. Always reallocate from worst to best performers.
+METRIC — S/GMV = Cost ÷ Conversion Value. LOWER S/GMV = BETTER (more profitable).
+  CRITICAL: A campaign at 15% S/GMV is FAR BETTER than one at 23% S/GMV.
+  Always scale campaigns with the LOWEST S/GMV first. Never scale a high-S/GMV campaign over a low-S/GMV one.
+
+Two S/GMV types — never mix them:
+  • wtd_sgmv = true WTD S/GMV from back-end data → compare ONLY against be5 (actual 5% BE)
+  • sg (per campaign) = dashboard S/GMV from Google Ads API → compare ONLY against db5/db0
+
+Thresholds:
+  • be5 = actual S/GMV breakeven at 5% margin. wtd_sgmv < be5 → account is profitable.
+  • db5 = dashboard-adjusted 5% BE. sg < db5 → campaign is profitable.
+  • db0 = dashboard-adjusted 0% BE. sg > db0 → campaign in loss.
+  • S/B = Spend÷Budget (3-day). High S/B → budget is the binding constraint → scaling will increase spend.
+  • isb = IS lost to budget (direct scaling opportunity). isr = IS lost to rank (bid/quality — budget alone won't help).
+
+KEY INSIGHT: Even if ALL campaigns are in loss, move spend from high-S/GMV (worse) to low-S/GMV (better) campaigns. This always improves overall ROAS and PnL.
 
 Read campaign names carefully — they often contain critical context ("Do Not Touch", "Maxed Out", dates, A/B variants). Use your judgment on every case.
 
-Guardrails (enforced in code after your output — keep in mind):
-  1. Total spend must stay roughly neutral for under/on-target accounts.
+MODES:
+  • Rebalance (neutral): spend-neutral reallocation. Do NOT scale campaigns just because an account is underspending — only scale if spend released from cuts can fund it.
+  • RevOps: fix spend gaps. For UNDER accounts — scale profitable campaigns aggressively (up to 50%) even without cuts to fund it. For OVER accounts — cut aggressively.
+
+Guardrails (enforced in code after your output):
+  1. In Rebalance mode: total spend must stay roughly neutral for under/on-target accounts.
   2. Max single-campaign increase: 50% above current budget.
 
 Output via tool call: for each account provide a recommended daily budget for every campaign + a 1-2 sentence summary of your strategy.\
@@ -75,14 +89,17 @@ def _pnl_str(pnl: list) -> str:
     return f"{m.get(pnl[0],'?')},{m.get(pnl[1],'?')},{m.get(pnl[6],'?')}"   # LLW,LW,WTD
 
 
-def _build_batch_prompt(pairs: list[tuple]) -> str:
+def _build_batch_prompt(pairs: list[tuple], mode: str = "neutral") -> str:
     """pairs: list of (account_dict, campaigns_list)"""
-    lines = ["Analyze each account and call submit_all_recommendations:\n"]
+    mode_line = f"MODE: {'RevOps' if mode == 'revops' else 'Rebalance (neutral)'}"
+    lines = [f"{mode_line}\nAnalyze each account and call submit_all_recommendations:\n"]
     for account, camps in pairs:
         db5  = account.get("db5")
         db0  = account.get("db0")
+        be5  = account.get("be5")
         db5s = f"{db5*100:.1f}%" if db5 else "?"
         db0s = f"{db0*100:.1f}%" if db0 else "?"
+        be5s = f"{be5*100:.1f}%" if be5 else "?"
         wtds = f"{account['wtdSGmv']*100:.1f}%" if account.get("wtdSGmv") else "?"
         spv  = (account.get("spv") or "?").upper()
         tgt  = int(account.get("target") or 0)
@@ -90,7 +107,7 @@ def _build_batch_prompt(pairs: list[tuple]) -> str:
 
         lines.append(
             f"=== {account['id']} | {account['name']} | "
-            f"wtd:{wtds} db5:{db5s} db0:{db0s} | {spv} | tgt:₹{tgt:,} | PnL:{pnl} ==="
+            f"wtd_sgmv:{wtds} be5:{be5s} db5:{db5s} db0:{db0s} | {spv} | tgt:₹{tgt:,} | PnL:{pnl} ==="
         )
         sorted_c = sorted(camps, key=lambda c: c["sgmv"] if c["sgmv"] else 999)
         for c in sorted_c:
@@ -219,20 +236,20 @@ def _post_process_account(account: dict, campaigns: list[dict],
         spend_d7    = _exp_spend_delta_7d(c["budget"], c["rec_budget"], c["sb"])
 
         result_campaigns.append({
-            "id":             c["id"],
-            "name":           c["name"],
-            "type":           c["type"],
-            "roas":           c["roas"],
-            "sgmv":           c["sgmv"],
-            "sb":             c["sb"],
-            "cost7d":         c["cost7d"],
-            "budg":           _fmt(c["budget"]),
-            "rec":            _fmt(c["rec_budget"]),
-            "dir":            dir_,
-            "delta":          delta_s,
-            "sbPct":          f"{round(c['sb']*100)}%",
-            "bucket":         c["action"],
-            "expSpendDelta7": round(spend_d7, 0),
+            "id":                c["id"],
+            "name":              c["name"],
+            "type":              c["type"],
+            "roas":              c["roas"],
+            "sgmv":              c["sgmv"],
+            "sb":                c["sb"],
+            "cost7d":            c["cost7d"],
+            "budg":              _fmt(c["budget"]),
+            "rec":               _fmt(c["rec_budget"]),
+            "dir":               dir_,
+            "delta":             delta_s,
+            "sbPct":             f"{round(c['sb']*100)}%",
+            "bucket":            c["action"],
+            "expSpendDeltaDay":  round(spend_d7 / 7, 0),
         })
 
     has_action = any(c["bucket"] in ("scale","cut") for c in result_campaigns)
@@ -250,7 +267,7 @@ def _post_process_account(account: dict, campaigns: list[dict],
 
 # ── main entry point ──────────────────────────────────────────────────────────
 
-def rebalance_all(pairs: list[tuple]) -> dict:
+def rebalance_all(pairs: list[tuple], mode: str = "neutral") -> dict:
     """
     pairs: list of (account_dict, campaigns_list)
     Returns: {seller_id: rec_dict}
@@ -266,7 +283,7 @@ def rebalance_all(pairs: list[tuple]) -> dict:
     # For each batch: one API call (run sequentially; parallelism via thread pool in main.py)
     all_results = {}
     for batch in batches:
-        prompt = _build_batch_prompt(batch)
+        prompt = _build_batch_prompt(batch, mode=mode)
         try:
             msg = client.messages.create(
                 model=MODEL,
