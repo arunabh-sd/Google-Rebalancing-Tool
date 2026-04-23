@@ -521,21 +521,28 @@ table.st tr:hover td{background:#FAFBFD}
         <div id="summary-wrap" class="summary-wrap" style="display:none">
           <div class="summary-hd">
             <div class="summary-hd-title">Summary</div>
-            <span class="be-ref" id="summary-mode-label"></span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="be-ref" id="summary-mode-label"></span>
+              <button class="btn-export" style="padding:4px 11px;font-size:11px" onclick="exportSummaryCSV()">
+                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Summary
+              </button>
+            </div>
           </div>
           <div class="summary-body">
-            <table class="st">
+            <table class="st" id="summary-tbl">
               <thead>
                 <tr>
                   <th style="text-align:left">Account</th>
                   <th>Y Spend</th>
-                  <th>Wk Target</th>
+                  <th>Daily Tgt</th>
                   <th>Status</th>
                   <th>Prof WTD</th>
                   <th>Rebln Budget</th>
                   <th>ROAS Lift</th>
                   <th>Exp Δ/day</th>
                   <th>Δ vs Daily Tgt</th>
+                  <th id="cover-col-hd" style="display:none">To Cover</th>
                 </tr>
               </thead>
               <tbody id="summary-body"></tbody>
@@ -736,12 +743,17 @@ function showResults(){
   const netAbs = Math.abs(Math.round(netSpendDay));
   const netStr = netAbs < 10 ? '~₹0' : (netSpendDay>0?'+':'')+'₹'+netAbs.toLocaleString('en-IN');
 
+  // Avg ROAS lift across accounts
+  const roasLifts = wr.map(id=>computeRoasLift(RECS[id].campaigns)).filter(r=>r!==null);
+  const avgRoasLift = roasLifts.length ? roasLifts.reduce((a,b)=>a+b,0)/roasLifts.length : null;
+  const roasLiftStr = avgRoasLift !== null ? (avgRoasLift>=0?'+':'')+(avgRoasLift*100).toFixed(1)+'%' : '—';
+
   const modeLabel = mode==='revops' ? 'RevOps Execution' : 'Rebalance · spend-neutral';
   document.getElementById('res-sub').textContent=
     `${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})} · ${ids.length} accounts · ${modeLabel}`;
   document.getElementById('s-a').textContent=ids.length;
   document.getElementById('s-sh').textContent=tsh||'—';
-  document.getElementById('s-r').textContent='—';
+  document.getElementById('s-r').textContent=roasLiftStr;
   document.getElementById('s-sp').textContent=netStr;
   document.getElementById('s-ac').textContent='0';
   cSt={};
@@ -754,18 +766,25 @@ function showResults(){
 }
 
 // ── SUMMARY TABLE ─────────────────────────────────────────────────────────────
-function buildSummaryTable(ids) {
-  const wrap = document.getElementById('summary-wrap');
-  const tbody = document.getElementById('summary-body');
-  const tfoot = document.getElementById('summary-foot');
-  const modeLabel = document.getElementById('summary-mode-label');
+// Stores row data for CSV export
+let SUMMARY_ROWS = [];
 
-  modeLabel.textContent = mode==='revops' ? 'Mode: RevOps Execution' : 'Mode: Rebalance (spend-neutral)';
+function buildSummaryTable(ids) {
+  const wrap   = document.getElementById('summary-wrap');
+  const tbody  = document.getElementById('summary-body');
+  const tfoot  = document.getElementById('summary-foot');
+  const modeEl = document.getElementById('summary-mode-label');
+  const coverHd = document.getElementById('cover-col-hd');
+
+  const isRevOps = mode === 'revops';
+  modeEl.textContent = isRevOps ? 'Mode: RevOps Execution' : 'Mode: Rebalance (spend-neutral)';
+  if(coverHd) coverHd.style.display = isRevOps ? '' : 'none';
 
   const fmtR = n => n != null && n > 0 ? '₹'+Math.round(n).toLocaleString('en-IN') : '—';
   const fmtD = n => n === null ? '—' : (n>=0?'+':'')+'₹'+Math.abs(Math.round(n)).toLocaleString('en-IN');
 
-  let totYSpend=0, totTarget=0, totExpDelta=0, totReblnBudget=0, totCount=0;
+  let totYSpend=0, totTarget=0, totExpDelta=0, totReblnBudget=0, totCover=0, totCount=0;
+  SUMMARY_ROWS = [];
 
   const rowsHtml = ids.map(id=>{
     const a = ACCTS.find(x=>x.id===id);
@@ -774,24 +793,36 @@ function buildSummaryTable(ids) {
     totCount++;
 
     const ySpend = a.ySpend || 0;
-    const wkTarget = a.target || 0;
-    const dailyTarget = wkTarget / 7;
+    const dailyTarget = a.target || 0;  // target field is already daily
 
     let totalExpDeltaDay = 0;
     let totalReblnBudget = 0;
     if(rec) {
       totalExpDeltaDay = rec.campaigns.reduce((s,c)=>s+(c.expSpendDeltaDay||0),0);
       totalReblnBudget = rec.campaigns.reduce((s,c)=>{
-        const n = parseInt((c.rec||'₹0').replace(/[₹,]/g,'')) || 0;
-        return s + n;
+        return s + (parseInt((c.rec||'₹0').replace(/[₹,]/g,''))||0);
       }, 0);
     }
 
     const expDailySpend = ySpend + totalExpDeltaDay;
     const deltaVsTgt = dailyTarget > 0 ? expDailySpend - dailyTarget : null;
+    // "To Cover": remaining gap for underspend accounts in RevOps mode
+    const toCover = (isRevOps && a.spv === 'under' && deltaVsTgt !== null && deltaVsTgt < 0)
+      ? Math.abs(Math.round(deltaVsTgt)) : 0;
 
-    totYSpend += ySpend; totTarget += wkTarget;
+    const roasLift = rec ? computeRoasLift(rec.campaigns) : null;
+    const roasLiftStr = roasLift !== null ? (roasLift>=0?'+':'')+(roasLift*100).toFixed(1)+'%' : '—';
+    const roasLiftCls = roasLift === null ? '' : roasLift >= 0 ? 'dp' : 'dn';
+
+    totYSpend += ySpend; totTarget += dailyTarget;
     totExpDelta += totalExpDeltaDay; totReblnBudget += totalReblnBudget;
+    totCover += toCover;
+
+    SUMMARY_ROWS.push({
+      name: a.name, adId: a.adId, ySpend, dailyTarget, spv: a.spv, prof: a.prof,
+      reblnBudget: totalReblnBudget, roasLiftStr, expDeltaDay: totalExpDeltaDay,
+      deltaVsTgt, toCover, expDailySpend
+    });
 
     const spvBadge = {
       under:`<span class="tag t-under">Under</span>`,
@@ -805,27 +836,33 @@ function buildSummaryTable(ids) {
     }[a.prof]||'';
     const dCls = deltaVsTgt===null?'':deltaVsTgt>=0?'dp':'dn';
     const eDCls = totalExpDeltaDay>=0?'dp':'dn';
+    const coverCell = isRevOps
+      ? `<td class="mono ${toCover>0?'s-amber':''}">${toCover>0?'₹'+toCover.toLocaleString('en-IN'):'—'}</td>`
+      : '';
 
     return `<tr>
       <td title="${a.name}">${a.name}</td>
       <td class="mono">${fmtR(ySpend)}</td>
-      <td class="mono">${fmtR(wkTarget)}</td>
+      <td class="mono">${fmtR(dailyTarget)}</td>
       <td>${spvBadge}</td>
       <td>${profBadge}</td>
       <td class="mono">${totalReblnBudget?fmtR(totalReblnBudget):'—'}</td>
-      <td class="mono" style="color:var(--ink-3)">—</td>
+      <td class="mono ${roasLiftCls}">${roasLiftStr}</td>
       <td class="mono ${eDCls}">${fmtD(totalExpDeltaDay)}</td>
       <td class="mono ${dCls}">${fmtD(deltaVsTgt)}</td>
+      ${coverCell}
     </tr>`;
   }).join('');
 
   tbody.innerHTML = rowsHtml;
 
-  const totDailyTarget = totTarget / 7;
   const totExpSpend = totYSpend + totExpDelta;
-  const totDeltaTgt = totDailyTarget > 0 ? totExpSpend - totDailyTarget : null;
+  const totDeltaTgt = totTarget > 0 ? totExpSpend - totTarget : null;
   const totEDCls = totExpDelta>=0?'dp':'dn';
   const totDCls = (totDeltaTgt||0)>=0?'dp':'dn';
+  const totCoverCell = isRevOps
+    ? `<td class="mono ${totCover>0?'s-amber':''}">${totCover>0?'₹'+totCover.toLocaleString('en-IN'):'—'}</td>`
+    : '';
 
   tfoot.innerHTML = `<tr>
     <td>Total (${totCount})</td>
@@ -836,9 +873,35 @@ function buildSummaryTable(ids) {
     <td class="mono" style="color:var(--ink-3)">—</td>
     <td class="mono ${totEDCls}">${fmtD(totExpDelta)}</td>
     <td class="mono ${totDCls}">${fmtD(totDeltaTgt)}</td>
+    ${totCoverCell}
   </tr>`;
 
   wrap.style.display = ids.length ? '' : 'none';
+}
+
+// ── SUMMARY CSV EXPORT ────────────────────────────────────────────────────────
+function exportSummaryCSV() {
+  if(!SUMMARY_ROWS.length){alert('Run rebalance first.');return;}
+  const isRevOps = mode === 'revops';
+  const hdr = ['Account','Ad Account ID','Y Spend','Daily Target','Status','Prof WTD',
+    'Rebln Budget','ROAS Lift','Exp Δ/day','Δ vs Daily Tgt'];
+  if(isRevOps) hdr.push('To Cover (New Campaigns)');
+  const rows = [hdr, ...SUMMARY_ROWS.map(r=>{
+    const row = [r.name, r.adId,
+      Math.round(r.ySpend), Math.round(r.dailyTarget),
+      r.spv, r.prof,
+      r.reblnBudget ? Math.round(r.reblnBudget) : '',
+      r.roasLiftStr,
+      Math.round(r.expDeltaDay),
+      r.deltaVsTgt !== null ? Math.round(r.deltaVsTgt) : ''];
+    if(isRevOps) row.push(r.toCover || '');
+    return row;
+  })];
+  const csv = rows.map(r=>r.join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const el = document.createElement('a');
+  el.href=url; el.download=`revops_summary_${new Date().toISOString().slice(0,10)}.csv`; el.click();
 }
 
 // ── PNL TREND BAR ─────────────────────────────────────────────────────────────
@@ -928,8 +991,7 @@ function buildCard(a, rec){
   let revopsBoxHtml = '';
   if(mode === 'revops' && rec && a.spv !== 'on') {
     const yS = a.ySpend || 0;
-    const wkTgt = a.target || 0;
-    const dailyTgt = wkTgt / 7;
+    const dailyTgt = a.target || 0;  // target is already daily
     const totalExpDay = rec.campaigns.reduce((s,c)=>s+(c.expSpendDeltaDay||0),0);
     const expSpend = yS + totalExpDay;
     const delta = dailyTgt > 0 ? expSpend - dailyTgt : null;
@@ -938,10 +1000,8 @@ function buildCard(a, rec){
     const dCls = delta===null?'':delta>=0?'g':'r';
     const remainingGap = delta !== null && delta < 0 ? Math.abs(delta) : 0;
     const newCampNote = remainingGap > 200
-      ? `<div class="new-camp-note">
-          ₹${Math.round(remainingGap).toLocaleString('en-IN')}/day still to cover — consider new campaigns
-          <button class="btn-new-csv" onclick="exportNewCampCSV('${a.id}',${Math.round(remainingGap)})">Download brief</button>
-        </div>` : '';
+      ? `<div class="new-camp-note">₹${Math.round(remainingGap).toLocaleString('en-IN')}/day still to cover — new campaigns needed (see summary CSV)</div>`
+      : '';
     revopsBoxHtml = `<div class="revops-box">
       <div class="revops-box-title">RevOps · ${a.spv==='under'?'Underspend':'Overspend'} Account</div>
       <div class="revops-kpis">
@@ -1000,7 +1060,7 @@ function buildCard(a, rec){
             <div class="kpi-v ${spvCls}">${spendPct}</div>
           </div>
           ${pnlBar(a.pnl)}
-          ${rec?`<div class="kpi"><div class="kpi-l">Proj Lift</div><div class="kpi-v g">${rec.projRoas}</div></div>`:''}
+          ${rec?(()=>{const rl=computeRoasLift(rec.campaigns);const rls=rl!==null?(rl>=0?'+':'')+(rl*100).toFixed(1)+'%':'—';return `<div class="kpi"><div class="kpi-l">ROAS Lift</div><div class="kpi-v ${rl!==null&&rl>=0?'g':rl!==null?'r':''}">${rls}</div></div>`})():''}
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           ${pillHtml}
@@ -1061,6 +1121,25 @@ function exportCSV(){
   const url=URL.createObjectURL(blob);
   const el=document.createElement('a');
   el.href=url;el.download=`shopdeck_rebalance_${new Date().toISOString().slice(0,10)}.csv`;el.click();
+}
+
+// ── ROAS LIFT ─────────────────────────────────────────────────────────────────
+function computeRoasLift(campaigns) {
+  if (!campaigns || !campaigns.length) return null;
+  let curSpend=0, curGmv=0, projSpend=0, projGmv=0;
+  for (const c of campaigns) {
+    const daily = (c.cost7d || 0) / 7;
+    const gmv   = daily * (c.roas || 0);
+    const delta = c.expSpendDeltaDay || 0;
+    curSpend  += daily;
+    curGmv    += gmv;
+    projSpend += daily + delta;
+    projGmv   += gmv + delta * (c.roas || 0);
+  }
+  if (curSpend < 5 || projSpend < 5) return null;
+  const curRoas = curGmv / curSpend;
+  if (curRoas < 0.01) return null;
+  return (projGmv / projSpend) / curRoas - 1;
 }
 
 function exportNewCampCSV(sid, gapPerDay) {

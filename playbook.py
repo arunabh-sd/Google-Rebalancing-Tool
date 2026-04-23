@@ -23,8 +23,12 @@ def _exp_spend_delta_7d(budget: float, rec_budget: float, sb: float) -> float:
     if rec_budget > budget:
         return (rec_budget - budget) * sb * 0.88 * 7
     elif rec_budget < budget:
-        daily = budget * min(sb, 1.0)
-        return (min(rec_budget, daily) - daily) * 7
+        old_pacing = budget * min(sb, 1.0)
+        # Hard: spend drops only if budget goes below current pacing
+        hard = min(rec_budget, old_pacing) - old_pacing
+        # Soft: proportional signal for non-budget-constrained campaigns
+        soft = (rec_budget - budget) * sb
+        return min(hard, soft) * 7   # most negative wins
     return 0.0
 
 

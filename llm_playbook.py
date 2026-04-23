@@ -25,9 +25,10 @@ def _exp_spend_delta_7d(budget: float, rec_budget: float, sb: float) -> float:
     if rec_budget > budget:
         return (rec_budget - budget) * sb * 0.88 * 7
     elif rec_budget < budget:
-        daily = budget * min(sb, 1.0)
-        new_daily = min(rec_budget, daily)
-        return (new_daily - daily) * 7
+        old_pacing = budget * min(sb, 1.0)
+        hard = min(rec_budget, old_pacing) - old_pacing
+        soft = (rec_budget - budget) * sb
+        return min(hard, soft) * 7
     return 0.0
 
 
