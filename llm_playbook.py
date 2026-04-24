@@ -241,18 +241,20 @@ def _post_process_account(account: dict, campaigns: list[dict],
     absorbed = sum(_absorbed(c["budget"], c["rec_budget"], c["sb"])
                    for c in merged if c["action"] == "scale")
 
-    if not revops_under and spv in ("under", "on") and released > absorbed + 100:
-        if absorbed <= 0:
+    # Spend-neutral: pull back scales proportionally if absorbed > released.
+    # Applies universally in neutral mode; RevOps/under is exempt.
+    if not revops_under and absorbed > released + 100:
+        if released <= 0:
             for c in merged:
-                if c["action"] == "cut":
+                if c["action"] == "scale":
                     c["action"]     = "leave"
                     c["rec_budget"] = c["budget"]
         else:
-            ratio = absorbed / released
+            adj = released / absorbed
             for c in merged:
-                if c["action"] == "cut":
-                    excess = c["budget"] - c["rec_budget"]
-                    c["rec_budget"] = max(round(c["budget"] - excess * ratio, 0), 100.0)
+                if c["action"] == "scale":
+                    excess = c["rec_budget"] - c["budget"]
+                    c["rec_budget"] = max(round(c["budget"] + excess * adj, 0), 100.0)
 
     # Format output campaigns
     result_campaigns = []

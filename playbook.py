@@ -172,16 +172,16 @@ def rebalance(account: dict, campaigns: list[dict], mode: str = "neutral") -> di
     absorbed = sum(_absorbed_spend(c["budget"], c["rec_budget"], c["sb"])
                    for c in ranked if c["role"] == "scale")
 
-    # RevOps/underspend: skip spend-neutral constraint — goal is to increase spend
-    if not revops_under and (all_loss or (not has_profit)):
-        # Scale campaigns should only absorb what cut campaigns release (spend-neutral)
-        if absorbed > 0 and released < absorbed:
-            adj = released / absorbed if absorbed > 0 else 0
-            for c in ranked:
-                if c["role"] == "scale":
-                    excess = c["rec_budget"] - c["budget"]
-                    c["rec_budget"] = round(c["budget"] + excess * adj, 0)
-                    c["rec_budget"] = max(c["rec_budget"], 100.0)
+    # Spend-neutral: scale campaigns should only absorb what cuts release.
+    # Applied universally in neutral mode (not just all_loss/no_profit).
+    # RevOps/underspend is exempt — goal there is to ADD spend.
+    if not revops_under and absorbed > 0 and released < absorbed:
+        adj = released / absorbed
+        for c in ranked:
+            if c["role"] == "scale":
+                excess = c["rec_budget"] - c["budget"]
+                c["rec_budget"] = round(c["budget"] + excess * adj, 0)
+                c["rec_budget"] = max(c["rec_budget"], 100.0)
 
     # Guardrail 1: for under/on-target in neutral mode, total spend must not drop
     proj_spend = total_spend_7d - released + absorbed
