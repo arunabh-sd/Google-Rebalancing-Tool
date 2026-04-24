@@ -325,14 +325,15 @@ table.ct tr:hover td{background:var(--paper-2)}
 
 /* loader */
 .loader{
-  position:fixed;inset:0;background:rgba(246,247,249,.9);backdrop-filter:blur(6px);
+  position:fixed;inset:0;background:rgba(246,247,249,.93);backdrop-filter:blur(6px);
   display:none;flex-direction:column;align-items:center;justify-content:center;
   z-index:999;gap:14px
 }
 .loader.on{display:flex}
 .spin{width:32px;height:32px;border:2.5px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-.ld-t{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink)}
+.ld-t{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink);text-align:center;max-width:340px;line-height:1.45;min-height:48px;transition:opacity .35s}
+.ld-t.fade{opacity:0}
 .ld-s{font-size:11px;color:var(--ink-3);font-family:var(--mono)}
 
 .no-r{padding:24px 12px;text-align:center;font-size:12px;color:var(--ink-3)}
@@ -560,7 +561,7 @@ table.st tr:hover td{background:#FAFBFD}
 <!-- LOADER -->
 <div class="loader" id="loader">
   <div class="spin"></div>
-  <div class="ld-t">Analysing campaigns…</div>
+  <div class="ld-t" id="ld-wit">Asking Claude to please not recommend ₹0 budgets…</div>
   <div class="ld-s" id="ld-sub">Connecting to MCC</div>
 </div>
 
@@ -700,11 +701,54 @@ function updateCTA(){
   btn.disabled=!n;
 }
 
+// ── WITTY LOADER ─────────────────────────────────────────────────────────────
+const WITTY = [
+  "Asking Claude to please not recommend ₹0 budgets…",
+  "Bribing the Google Ads API with compliments…",
+  "Converting ROAS into vibes…",
+  "Teaching S/GMV to a very confused AI…",
+  "Negotiating with campaigns that refuse to spend…",
+  "Checking if 'Do Not Touch' really means do not touch…",
+  "Moving money around like it's musical chairs…",
+  "Consulting 3 spreadsheets and a gut feeling…",
+  "Politely asking loss campaigns to touch grass…",
+  "Making PMAX campaigns feel seen and heard…",
+  "Running the numbers so you don't have to squint…",
+  "Finding the one campaign that's quietly printing money…",
+  "Redistributing budgets with reckless optimism…",
+  "Whispering sweet CPCs to the algorithm…",
+  "Diagnosing campaign trauma from impression share loss…",
+  "Calculating deltas that will make you feel things…",
+  "Telling Search campaigns the Shopping ones are doing better…",
+  "Wondering if S/B above 1.0 is a feature or a cry for help…",
+  "Reallocating spend with the confidence of a mid-level analyst…",
+  "Checking if your breakeven is actually broken…",
+];
+let _witTimer = null;
+function _startWitty(){
+  const el = document.getElementById('ld-wit');
+  let idx = Math.floor(Math.random() * WITTY.length);
+  el.textContent = WITTY[idx];
+  _witTimer = setInterval(()=>{
+    el.classList.add('fade');
+    setTimeout(()=>{
+      idx = (idx + 1) % WITTY.length;
+      el.textContent = WITTY[idx];
+      el.classList.remove('fade');
+    }, 360);
+  }, 3200);
+}
+function _stopWitty(){
+  clearInterval(_witTimer);
+  _witTimer = null;
+}
+
 // ── RUN ───────────────────────────────────────────────────────────────────────
 async function run(){
   const ov=document.getElementById('loader');
   const sub=document.getElementById('ld-sub');
   ov.classList.add('on');
+  _startWitty();
   sub.textContent='Fetching campaign data from Google Ads…';
 
   const ids=[...sel];
@@ -725,6 +769,7 @@ async function run(){
     console.error('Rebalance fetch failed:',e);
   }
 
+  _stopWitty();
   ov.classList.remove('on');
   showResults();
 }
