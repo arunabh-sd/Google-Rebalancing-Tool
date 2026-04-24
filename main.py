@@ -1,8 +1,11 @@
 import os
 import time
+import json
+import queue as _sq
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sheets_service import get_accounts, get_raw
@@ -94,6 +97,99 @@ async def rebalance_accounts(req: RebalanceRequest):
             }
 
     return result
+
+
+@app.post("/api/rebalance/stream")
+async def rebalance_accounts_stream(req: RebalanceRequest):
+    loop = asyncio.get_event_loop()
+
+    try:
+        all_accounts = _get_accounts_cached()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sheet error: {e}")
+
+    id_map = {a["id"]: a for a in all_accounts}
+
+    async def event_stream():
+        yield f"data: {json.dumps({'type':'phase','msg':'Fetching campaign data from Google Ads…'})}\n\n"
+
+        async def fetch_one(sid):
+            acct = id_map.get(sid)
+            if not acct or not acct.get("adId"):
+                return sid, acct, []
+            try:
+                camps = await loop.run_in_executor(_executor, get_campaigns, acct["adId"])
+                return sid, acct, camps
+            except Exception as e:
+                print(f"Campaign fetch error [{sid}]: {e}")
+                return sid, acct, []
+
+        fetch_results = await asyncio.gather(*[fetch_one(sid) for sid in req.ids])
+        pairs = [(acct, camps) for _, acct, camps in fetch_results if acct and camps]
+        total = len(req.ids)
+
+        yield f"data: {json.dumps({'type':'total','total':total})}\n\n"
+        yield f"data: {json.dumps({'type':'phase','msg':'Claude is analyzing each account…'})}\n\n"
+
+        result = {}
+        done_count = [0]
+        q = _sq.Queue()
+        use_llm = os.environ.get("USE_LLM", "true").lower() == "true"
+
+        if use_llm and os.environ.get("ANTHROPIC_API_KEY"):
+            try:
+                from llm_playbook import rebalance_all
+
+                def progress_cb(sid):
+                    done_count[0] += 1
+                    q.put({"type": "progress", "done": done_count[0], "total": total, "sid": sid})
+
+                future = loop.run_in_executor(_executor, lambda: rebalance_all(pairs, req.mode, progress_cb))
+
+                while True:
+                    try:
+                        event = q.get_nowait()
+                        yield f"data: {json.dumps(event)}\n\n"
+                    except _sq.Empty:
+                        if future.done():
+                            break
+                        await asyncio.sleep(0.1)
+
+                while not q.empty():
+                    yield f"data: {json.dumps(q.get_nowait())}\n\n"
+
+                try:
+                    result = await future
+                except Exception as e:
+                    print(f"LLM rebalance error: {e}")
+
+            except Exception as e:
+                print(f"LLM setup error: {e}")
+
+        # Rule-based fallback — also emit progress per account
+        processed = set(result.keys())
+        for sid, acct, camps in fetch_results:
+            if sid in processed or not acct or not camps:
+                continue
+            try:
+                rec = rule_rebalance(acct, camps, req.mode)
+                if rec:
+                    result[sid] = rec
+            except Exception as e:
+                result[sid] = {
+                    "campaigns": [], "signals": [{"c": "red", "t": str(e)[:120]}],
+                    "projRoas": "—", "flag": "", "recentChanges": None,
+                }
+            done_count[0] += 1
+            yield f"data: {json.dumps({'type':'progress','done':done_count[0],'total':total,'sid':sid})}\n\n"
+
+        yield f"data: {json.dumps({'type':'result','data':result})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/campaigns/{customer_id}")

@@ -303,7 +303,7 @@ def _post_process_account(account: dict, campaigns: list[dict],
 
 # ── main entry point ──────────────────────────────────────────────────────────
 
-def rebalance_all(pairs: list[tuple], mode: str = "neutral") -> dict:
+def rebalance_all(pairs: list[tuple], mode: str = "neutral", progress_cb=None) -> dict:
     """
     pairs: list of (account_dict, campaigns_list)
     Returns: {seller_id: rec_dict}
@@ -340,6 +340,8 @@ def rebalance_all(pairs: list[tuple], mode: str = "neutral") -> dict:
                         rec = _post_process_account(account, campaigns, llm_acct, mode=mode)
                         if rec:
                             all_results[sid] = rec
+                        if progress_cb:
+                            progress_cb(sid)
         except Exception as e:
             print(f"LLM batch error: {e}")
             # Fallback handled in main.py

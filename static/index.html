@@ -324,17 +324,22 @@ table.ct tr:hover td{background:var(--paper-2)}
 .btn-acc:hover{background:var(--green);color:#fff}
 
 /* loader */
-.loader{
-  position:fixed;inset:0;background:rgba(246,247,249,.93);backdrop-filter:blur(6px);
-  display:none;flex-direction:column;align-items:center;justify-content:center;
-  z-index:999;gap:14px
-}
+.loader{position:fixed;inset:0;background:rgba(10,14,24,.70);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;z-index:999}
 .loader.on{display:flex}
-.spin{width:32px;height:32px;border:2.5px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:sp .7s linear infinite}
+.ld-card{background:var(--paper);border:1px solid var(--line);border-radius:16px;box-shadow:0 32px 80px rgba(0,0,0,.22);padding:28px 30px 24px;width:430px;max-width:calc(100vw - 40px);display:flex;flex-direction:column;gap:18px}
+.ld-header{display:flex;align-items:center;gap:9px}
+.spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:sp .7s linear infinite;flex-shrink:0}
 @keyframes sp{to{transform:rotate(360deg)}}
-.ld-t{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink);text-align:center;max-width:340px;line-height:1.45;min-height:48px;transition:opacity .35s}
-.ld-t.fade{opacity:0}
-.ld-s{font-size:11px;color:var(--ink-3);font-family:var(--mono)}
+.ld-header-lbl{font-size:10px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.6px;font-family:var(--sans)}
+.ld-wit{font-family:var(--serif);font-style:italic;font-size:15px;color:var(--ink);line-height:1.58;min-height:48px;transition:opacity .32s ease}
+.ld-wit.fade{opacity:0}
+.ld-prog-section{display:flex;flex-direction:column;gap:7px}
+.ld-bar-wrap{height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+.ld-bar-fill{height:100%;background:var(--blue);border-radius:3px;width:5%;transition:width .5s ease}
+.ld-prog-row{display:flex;justify-content:space-between;align-items:center}
+.ld-sub{font-size:10px;color:var(--ink-3);font-family:var(--mono)}
+.ld-count{font-size:10px;color:var(--blue);font-family:var(--mono);font-weight:700}
+.ld-note{font-size:10px;color:var(--ink-3);line-height:1.55;padding-top:2px;border-top:1px solid var(--line);font-family:var(--sans)}
 
 .no-r{padding:24px 12px;text-align:center;font-size:12px;color:var(--ink-3)}
 .err-r{padding:24px 12px;text-align:center;font-size:12px;color:var(--red)}
@@ -543,7 +548,7 @@ table.st tr:hover td{background:#FAFBFD}
                   <th>ROAS Lift</th>
                   <th>Exp Δ/day</th>
                   <th>Δ vs Daily Tgt</th>
-                  <th id="cover-col-hd" style="display:none">To Cover</th>
+                  <th id="cover-col-hd" style="display:none">To Cover via New Campaigns</th>
                 </tr>
               </thead>
               <tbody id="summary-body"></tbody>
@@ -560,9 +565,21 @@ table.st tr:hover td{background:#FAFBFD}
 
 <!-- LOADER -->
 <div class="loader" id="loader">
-  <div class="spin"></div>
-  <div class="ld-t" id="ld-wit">Asking Claude to please not recommend ₹0 budgets…</div>
-  <div class="ld-s" id="ld-sub">Connecting to MCC</div>
+  <div class="ld-card">
+    <div class="ld-header">
+      <div class="spin"></div>
+      <span class="ld-header-lbl">Claude is working…</span>
+    </div>
+    <div class="ld-wit" id="ld-wit">Checking if 'Do Not Touch' is a campaign name or a threat…</div>
+    <div class="ld-prog-section">
+      <div class="ld-bar-wrap"><div class="ld-bar-fill" id="ld-fill"></div></div>
+      <div class="ld-prog-row">
+        <span class="ld-sub" id="ld-sub">Connecting to Google Ads…</span>
+        <span class="ld-count" id="ld-count"></span>
+      </div>
+    </div>
+    <div class="ld-note">Not if-else rules — every account is read fresh by Claude with full context: campaign names, S/GMV, impression share, PnL history. It's a new session each time.</div>
+  </div>
 </div>
 
 <script>
@@ -703,26 +720,29 @@ function updateCTA(){
 
 // ── WITTY LOADER ─────────────────────────────────────────────────────────────
 const WITTY = [
-  "Asking Claude to please not recommend ₹0 budgets…",
-  "Bribing the Google Ads API with compliments…",
-  "Converting ROAS into vibes…",
-  "Teaching S/GMV to a very confused AI…",
-  "Negotiating with campaigns that refuse to spend…",
-  "Checking if 'Do Not Touch' really means do not touch…",
-  "Moving money around like it's musical chairs…",
-  "Consulting 3 spreadsheets and a gut feeling…",
-  "Politely asking loss campaigns to touch grass…",
-  "Making PMAX campaigns feel seen and heard…",
-  "Running the numbers so you don't have to squint…",
-  "Finding the one campaign that's quietly printing money…",
-  "Redistributing budgets with reckless optimism…",
-  "Whispering sweet CPCs to the algorithm…",
-  "Diagnosing campaign trauma from impression share loss…",
-  "Calculating deltas that will make you feel things…",
-  "Telling Search campaigns the Shopping ones are doing better…",
-  "Wondering if S/B above 1.0 is a feature or a cry for help…",
-  "Reallocating spend with the confidence of a mid-level analyst…",
-  "Checking if your breakeven is actually broken…",
+  "Checking if 'Do Not Touch' is a campaign name or a threat…",
+  "Telling PMAX it's not the main character. Again.",
+  "Calculating exactly how much money you left on the table last week…",
+  "Diplomatically informing 4 campaigns they're getting cut…",
+  "Finding the hidden gem campaign your team forgot existed…",
+  "Explaining S/GMV to a campaign that clearly doesn't care…",
+  "Asking Claude to please, please not set everyone's budget to ₹1…",
+  "Consulting the algorithm. It said 'send more budget'. Classic.",
+  "Checking if that ₹135 weekly spend is a strategy or an accident…",
+  "Reallocating spend like it's Diwali and everyone gets a gift…",
+  "Determining which campaigns are in loss vs. which are just vibing…",
+  "Running 40 mental models so you don't have to squint at a spreadsheet…",
+  "Performing surgery on budgets without waking the client…",
+  "Making the algorithm feel seen and heard before cutting its budget…",
+  "Checking if 'Maxed Out' is a campaign name or a mood…",
+  "S/GMV is just vibes in a trench coat doing math…",
+  "Reverse-engineering your RevOps gap with dangerous optimism…",
+  "Asking Claude to be honest about which campaigns are beyond saving…",
+  "Convincing border campaigns that a 20% bump is a vote of confidence…",
+  "Finding who's been spending money with zero conversions. A reckoning awaits.",
+  "Running the numbers so aggressively that the numbers get nervous…",
+  "Assigning every rupee a purpose. A noble mission, honestly.",
+  "Checking 102% S/B — is that a flex or a scream for help?",
 ];
 let _witTimer = null;
 function _startWitty(){
@@ -735,8 +755,8 @@ function _startWitty(){
       idx = (idx + 1) % WITTY.length;
       el.textContent = WITTY[idx];
       el.classList.remove('fade');
-    }, 360);
-  }, 3200);
+    }, 340);
+  }, 3400);
 }
 function _stopWitty(){
   clearInterval(_witTimer);
@@ -745,28 +765,62 @@ function _stopWitty(){
 
 // ── RUN ───────────────────────────────────────────────────────────────────────
 async function run(){
-  const ov=document.getElementById('loader');
-  const sub=document.getElementById('ld-sub');
+  const ov    = document.getElementById('loader');
+  const fill  = document.getElementById('ld-fill');
+  const sub   = document.getElementById('ld-sub');
+  const count = document.getElementById('ld-count');
+
   ov.classList.add('on');
   _startWitty();
-  sub.textContent='Fetching campaign data from Google Ads…';
+  fill.style.transition = 'width 1.8s ease';
+  fill.style.width = '5%';
+  sub.textContent = 'Connecting to Google Ads…';
+  count.textContent = '';
+  setTimeout(() => { fill.style.width = '20%'; }, 80);
 
-  const ids=[...sel];
-  try{
-    const resp=await fetch('/api/rebalance',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ids, mode})
+  const ids = [...sel];
+  try {
+    const resp = await fetch('/api/rebalance/stream', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ids, mode})
     });
-    if(!resp.ok){
-      const err=await resp.json().catch(()=>({detail:'Unknown error'}));
-      console.error('Rebalance error:',err.detail);
+    if (!resp.ok) {
+      console.error('Rebalance error:', await resp.text());
     } else {
-      const recs=await resp.json();
-      Object.assign(RECS,recs);
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, {stream: true});
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let ev; try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+          if (ev.type === 'total') {
+            fill.style.transition = 'width .5s ease';
+            fill.style.width = '22%';
+            count.textContent = `0 / ${ev.total}`;
+          } else if (ev.type === 'phase') {
+            sub.textContent = ev.msg;
+          } else if (ev.type === 'progress') {
+            const pct = 22 + Math.round((ev.done / ev.total) * 72);
+            fill.style.width = pct + '%';
+            count.textContent = `${ev.done} / ${ev.total} accounts`;
+          } else if (ev.type === 'result') {
+            fill.style.width = '100%';
+            sub.textContent = 'Almost done…';
+            Object.assign(RECS, ev.data);
+            await new Promise(r => setTimeout(r, 420));
+          }
+        }
+      }
     }
-  }catch(e){
-    console.error('Rebalance fetch failed:',e);
+  } catch(e) {
+    console.error('Rebalance fetch failed:', e);
   }
 
   _stopWitty();
@@ -931,7 +985,7 @@ function exportSummaryCSV() {
   const isRevOps = mode === 'revops';
   const hdr = ['Account','Ad Account ID','Y Spend','Daily Target','Status','Prof WTD',
     'Rebln Budget','ROAS Lift','Exp Δ/day','Δ vs Daily Tgt'];
-  if(isRevOps) hdr.push('To Cover (New Campaigns)');
+  if(isRevOps) hdr.push('To Cover via New Campaigns');
   const rows = [hdr, ...SUMMARY_ROWS.map(r=>{
     const row = [r.name, r.adId,
       Math.round(r.ySpend), Math.round(r.dailyTarget),
@@ -1152,21 +1206,27 @@ function accAll(){[...sel].forEach(id=>{if(RECS[id]&&cSt[id]!=='skipped')accCard
 function updAcc(){document.getElementById('s-ac').textContent=Object.values(cSt).filter(s=>s==='accepted').length;}
 
 function exportCSV(){
-  const acc=[...sel].filter(id=>cSt[id]==='accepted'&&RECS[id]);
-  if(!acc.length){alert('Accept at least one account first.');return;}
-  let rows=[['Action','Customer ID','Campaign','Campaign ID','Budget','Budget type']];
-  acc.forEach(id=>{
-    const a=ACCTS.find(x=>x.id===id);
-    RECS[id].campaigns.filter(c=>c.bucket!=='leave').forEach((c,i)=>{
-      const b=parseInt(c.rec.replace(/[₹,]/g,''));
-      rows.push(['Set',a.adId,c.name,`CAMP_${a.id}_${i+1}`,b,'Daily']);
-    });
+  const acc = [...sel].filter(id => cSt[id]==='accepted' && RECS[id]);
+  if (!acc.length) { alert('Accept at least one account first.'); return; }
+  const rows = [['Customer ID','Campaign ID','Budget']];
+  acc.forEach(id => {
+    const a = ACCTS.find(x => x.id === id);
+    if (!a || !a.adId) return;
+    const cid = a.adId.replace(/-/g,'');
+    RECS[id].campaigns
+      .filter(c => c.bucket === 'scale' || c.bucket === 'cut')
+      .forEach(c => {
+        const budget = parseInt((c.rec||'₹0').replace(/[₹,]/g,'')) || 0;
+        rows.push([cid, c.id, budget]);
+      });
   });
-  const csv=rows.map(r=>r.join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});
-  const url=URL.createObjectURL(blob);
-  const el=document.createElement('a');
-  el.href=url;el.download=`shopdeck_rebalance_${new Date().toISOString().slice(0,10)}.csv`;el.click();
+  if (rows.length <= 1) { alert('No changed campaigns in accepted accounts.'); return; }
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const el = document.createElement('a');
+  el.href = url; el.download = `mcc_upload_${new Date().toISOString().slice(0,10)}.csv`; el.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── ROAS LIFT ─────────────────────────────────────────────────────────────────
