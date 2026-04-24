@@ -73,7 +73,13 @@ Read campaign names carefully — they often contain critical context ("Do Not T
 
 MODES:
   • Rebalance (neutral): spend-neutral reallocation. Do NOT scale campaigns just because an account is underspending — only scale if spend released from cuts can fund it.
-  • RevOps: fix spend gaps. For UNDER accounts — scale profitable campaigns aggressively (up to 50%) even without cuts to fund it. For OVER accounts — cut aggressively.
+  • RevOps/UNDER: aggressive spend recovery. MANDATORY rules:
+      - Every campaign with sg < db5 → action="scale", rec_budget = budget × 1.40-1.50 (push hard).
+      - Every campaign with db5 ≤ sg < db0 → action="scale", rec_budget = budget × 1.15-1.25.
+      - Campaigns with sg > db0 or no conversions → action="cut" or "leave".
+      - EXCEPTION: never scale campaigns whose name contains "DNT", "Do Not Touch", or "Maxed Out".
+      - Post-processing enforces the 50% cap — set recs aggressively, guardrail will clip if needed.
+  • RevOps/OVER: cut aggressively to reduce spend to target.
 
 Guardrails (enforced in code after your output):
   1. In Rebalance mode: total spend must stay roughly neutral for under/on-target accounts.
@@ -179,16 +185,24 @@ def _fmt(n: float) -> str:
     return "₹" + f"{int(round(n)):,}"
 
 
+_DNT_KEYWORDS = ("DNT", "DO NOT TOUCH", "MAXED OUT", "PAUSED")
+
+
+def _is_dnt(name: str) -> bool:
+    n = name.upper()
+    return any(k in n for k in _DNT_KEYWORDS)
+
+
 def _post_process_account(account: dict, campaigns: list[dict],
-                           llm_acct: dict) -> dict | None:
+                           llm_acct: dict, mode: str = "neutral") -> dict | None:
     """Apply hard guardrails on top of Claude's budget recommendations."""
     db5 = account.get("db5")
     db0 = account.get("db0")
     spv = account.get("spv", "on")
+    revops_under = (mode == "revops" and spv == "under")
 
     # Build campaign lookup
-    camp_by_id = {c["id"]: c for c in campaigns}
-    llm_by_id  = {r["id"]: r for r in llm_acct.get("campaigns", [])}
+    llm_by_id = {r["id"]: r for r in llm_acct.get("campaigns", [])}
 
     # Merge: LLM rec → original campaign data
     merged = []
@@ -198,18 +212,36 @@ def _post_process_account(account: dict, campaigns: list[dict],
             merged.append({**c, "rec_budget": c["budget"], "action": "leave"})
             continue
         rec = float(llm["rec_budget"])
-        # Hard caps
         rec = max(rec, 100.0)
         rec = min(rec, c["budget"] * 1.50)   # guardrail 2
         merged.append({**c, "rec_budget": round(rec, 0), "action": llm["action"]})
 
-    # Spend transfer balance
+    # RevOps+UNDER: force-scale ALL profitable campaigns the LLM left behind
+    if revops_under:
+        for c in merged:
+            if _is_dnt(c.get("name", "")):
+                continue
+            sgmv = c.get("sgmv")
+            # Profit campaigns (sg < db5) → push to 50%
+            if sgmv is not None and db5 is not None and sgmv < db5:
+                if c["action"] in ("leave", "watch"):
+                    c["action"]     = "scale"
+                    c["rec_budget"] = round(c["budget"] * 1.50, 0)
+                elif c["action"] == "scale" and c["rec_budget"] < c["budget"] * 1.30:
+                    c["rec_budget"] = round(c["budget"] * 1.50, 0)
+            # Border campaigns (db5 ≤ sg < db0) → modest 20% lift
+            elif (sgmv is not None and db5 is not None and db0 is not None
+                  and db5 <= sgmv < db0 and c["action"] in ("leave", "watch")):
+                c["action"]     = "scale"
+                c["rec_budget"] = round(c["budget"] * 1.20, 0)
+
+    # Spend transfer balance (skip in RevOps underspend — goal is to add spend)
     released = sum(_released(c["budget"], c["rec_budget"], c["sb"])
                    for c in merged if c["action"] == "cut")
     absorbed = sum(_absorbed(c["budget"], c["rec_budget"], c["sb"])
                    for c in merged if c["action"] == "scale")
 
-    if spv in ("under", "on") and released > absorbed + 100:
+    if not revops_under and spv in ("under", "on") and released > absorbed + 100:
         if absorbed <= 0:
             for c in merged:
                 if c["action"] == "cut":
@@ -227,7 +259,8 @@ def _post_process_account(account: dict, campaigns: list[dict],
     for c in merged:
         delta   = c["rec_budget"] - c["budget"]
         pct_ch  = abs(delta) / c["budget"] if c["budget"] > 0 else 0
-        if pct_ch < 0.08:
+        # Bypass 8% filter for RevOps scale actions
+        if pct_ch < 0.08 and not (revops_under and c["action"] == "scale"):
             c["action"]     = "watch" if c["action"] == "watch" else "leave"
             c["rec_budget"] = c["budget"]
             delta = 0.0
@@ -302,7 +335,7 @@ def rebalance_all(pairs: list[tuple], mode: str = "neutral") -> dict:
                         if sid not in acct_map:
                             continue
                         account, campaigns = acct_map[sid]
-                        rec = _post_process_account(account, campaigns, llm_acct)
+                        rec = _post_process_account(account, campaigns, llm_acct, mode=mode)
                         if rec:
                             all_results[sid] = rec
         except Exception as e:

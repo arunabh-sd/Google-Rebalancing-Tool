@@ -116,10 +116,11 @@ def rebalance(account: dict, campaigns: list[dict], mode: str = "neutral") -> di
         else:
             if cls == "profit":
                 c["role"] = "scale"
+            elif cls == "border":
+                # In RevOps underspend, nudge border campaigns up too
+                c["role"] = "scale" if revops_under else "watch"
             elif cls in ("loss", "no_conv"):
                 c["role"] = "cut"
-            elif cls == "border":
-                c["role"] = "watch"
             else:
                 c["role"] = "leave"
 
@@ -134,11 +135,13 @@ def rebalance(account: dict, campaigns: list[dict], mode: str = "neutral") -> di
         role    = c["role"]
 
         if role == "scale":
-            if all_loss:
-                # Conservative: scale proportional to how much better this is vs account average
+            if revops_under:
+                # RevOps underspend: push all profitable campaigns to max
+                scale = max_scale
+            elif all_loss:
                 avg_roas = (sum(x["roas"] for x in ranked if x["roas"] > 0) / n) or 1
-                rel_edge = min((c["roas"] - avg_roas) / avg_roas, 0.5)  # 0 → 0.5
-                scale    = 1.15 + rel_edge * 0.30                        # 1.15 → 1.30
+                rel_edge = min((c["roas"] - avg_roas) / avg_roas, 0.5)
+                scale    = 1.15 + rel_edge * 0.30
             else:
                 margin  = max(0.0, (db5 - sgmv) / db5) if db5 and sgmv else 0
                 is_opp  = min(is_b * 1.5, 0.35)
@@ -206,7 +209,8 @@ def rebalance(account: dict, campaigns: list[dict], mode: str = "neutral") -> di
         delta  = rec - budget
         pct_ch = abs(delta) / budget if budget > 0 else 0
 
-        if pct_ch < 0.08:
+        # Bypass 8% filter for RevOps underspend scale campaigns
+        if pct_ch < 0.08 and not (revops_under and c["role"] == "scale"):
             c["role"]       = "watch" if c["role"] == "watch" else "leave"
             c["rec_budget"] = budget
             delta = 0.0

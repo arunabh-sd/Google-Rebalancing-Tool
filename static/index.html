@@ -799,9 +799,10 @@ function buildSummaryTable(ids) {
     let totalReblnBudget = 0;
     if(rec) {
       totalExpDeltaDay = rec.campaigns.reduce((s,c)=>s+(c.expSpendDeltaDay||0),0);
-      totalReblnBudget = rec.campaigns.reduce((s,c)=>{
-        return s + (parseInt((c.rec||'₹0').replace(/[₹,]/g,''))||0);
-      }, 0);
+      // Only sum campaigns actually being changed (scale/cut), not hold/leave
+      totalReblnBudget = rec.campaigns
+        .filter(c=>c.bucket==='scale'||c.bucket==='cut')
+        .reduce((s,c)=>s+(parseInt((c.rec||'₹0').replace(/[₹,]/g,''))||0),0);
     }
 
     const expDailySpend = ySpend + totalExpDeltaDay;
